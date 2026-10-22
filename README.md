@@ -53,3 +53,17 @@ set -a; . ./.env; set +a
 | GET | `/api/reports/latest`, `/api/reports/{date}` | report JSON |
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status |
+
+## CI/CD (Jenkins)
+
+`Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → lint/tests in throwaway containers → teardown → build & deploy → health check → smoke test via nginx. It reports every build to Discord.
+
+Non-secret runtime settings (`TZ`, `HTTP_PORT`, `LLM_*`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
+
+| Credential ID | Used as |
+| --- | --- |
+| `pws-news-admin-token` | `ADMIN_TOKEN` |
+| `pws-news-llm-api-key` | `LLM_API_KEY` (any placeholder works for Ollama) |
+| `discord-pws-builds-channel-webhook` | Discord webhook for build alerts |
+
+The agent needs Docker with the compose plugin and the Discord Notifier plugin. Report history is stored in `data/` inside the job workspace, so don't wipe the workspace between builds.

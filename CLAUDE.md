@@ -17,3 +17,4 @@ See README.md for architecture and commands.
 ## Checks
 - `cd backend && ../.venv/bin/python -m pytest` (venv: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt`)
 - `cd frontend && npm test` (Node >= 20)
+- CI: `Jenkinsfile` runs the same checks in containers (plus `ruff check --select E9,F` on the backend). If you add env vars to `.env.example`, add them to the Jenkinsfile `environment {}` block and its `.env` writer too.
