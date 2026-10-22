@@ -7,6 +7,7 @@ See README.md for architecture and commands.
 - `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → group → score → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history), `main.py` (routes).
 - `frontend/src/`: Node renderer and scheduler. `report-format/` holds ALL page layout and styling. Keep presentation out of `publish.js`, `jobs.js` and `main.js`.
 - `nginx/nginx.conf`: static serving and cache headers.
+- `Dockerfile`, `docker/entrypoint.sh`, `docker-compose.yml`: one image/container runs backend (127.0.0.1:8000), renderer and nginx (:80), served via the external `traefik` network. Data lives under `/app/data`.
 
 ## Rules
 - New source types: add a `Connector` subclass with `@register("<type>")` and import it in `connectors/__init__.py`. Don't special-case source types in the pipeline.

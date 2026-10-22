@@ -26,12 +26,12 @@ Report layout lives only in `frontend/src/report-format/`. After changing it, ru
 ## Running
 
 ```sh
-cp .env.example .env   # set ADMIN_TOKEN, TZ, LLM_BASE_URL / LLM_MODEL
+cp .env.example .env   # set DOMAIN, ADMIN_TOKEN, TZ, LLM_BASE_URL / LLM_MODEL
 docker compose up -d --build
-docker compose exec renderer node src/main.js generate   # first render now instead of waiting for 08:00
+docker compose exec pws-news node src/main.js generate   # first render now instead of waiting for 08:00
 ```
 
-The site is served on `http://localhost:${HTTP_PORT}`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
+The root `Dockerfile` builds one image that runs the backend, renderer and nginx (`docker/entrypoint.sh`). The `pws-news` container joins the external `traefik` network and is routed at `https://${DOMAIN}`; no host ports are published. Reports and rendered pages persist in `./data`, and `./config` is mounted so source edits apply without a rebuild. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
 
 ## Development
 
