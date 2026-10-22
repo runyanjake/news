@@ -1,0 +1,79 @@
+# PWS News — single source of truth for media sources and pipeline tuning.
+#
+# Each source names a connector `type` (see backend/app/connectors/). Add a new
+# kind of feed by writing a connector class and registering it under a new type;
+# no other code needs to change. Values like "${SOME_TOKEN}" are read from the
+# environment so secrets stay in .env.
+#
+# reputation: 0.0–1.0 editorial weight used when scoring sources.
+
+sources:
+  - id: guardian-world
+    name: The Guardian World
+    type: rss
+    url: https://www.theguardian.com/world/rss
+    reputation: 0.85
+  - id: aljazeera
+    name: Al Jazeera
+    type: rss
+    url: https://www.aljazeera.com/xml/rss/all.xml
+    reputation: 0.8
+  - id: bbc-world
+    name: BBC World
+    type: rss
+    url: https://feeds.bbci.co.uk/news/world/rss.xml
+    reputation: 0.85
+  - id: npr-news
+    name: NPR News
+    type: rss
+    url: https://feeds.npr.org/1001/rss.xml
+    reputation: 0.8
+  - id: hn-front
+    name: Hacker News
+    type: rss
+    url: https://hnrss.org/frontpage
+    reputation: 0.6
+  - id: ars-technica
+    name: Ars Technica
+    type: rss
+    url: https://feeds.arstechnica.com/arstechnica/index
+    reputation: 0.75
+  # Example of a future non-RSS connector (no implementation yet):
+  # - id: some-twitter-list
+  #   name: Curated X list
+  #   type: twitter
+  #   reputation: 0.5
+  #   options:
+  #     list_id: "123"
+  #     bearer_token: "${TWITTER_BEARER_TOKEN}"
+
+pipeline:
+  max_age_hours: 36          # ignore items older than this
+  max_items_per_source: 30
+
+grouping:
+  # "keywords": manual topic rules below, then title-similarity clustering.
+  # "llm":      ask the LLM to cluster; falls back to "keywords" on failure.
+  method: keywords
+  similarity_threshold: 0.25
+  # Manual buckets: any article whose title contains a keyword joins that topic.
+  # Keep them story-sized (an ongoing event), not broad sections, or unrelated
+  # stories get summarised together.
+  topics: []
+  # topics:
+  #   - name: Ukraine War
+  #     keywords: [ukraine, kyiv, zelensky]
+  #   - name: Federal Reserve
+  #     keywords: [fed, powell, fomc]
+
+scoring:
+  weights:
+    reputation: 0.5
+    recency: 0.3
+    relevance: 0.2
+  recency_half_life_hours: 12
+
+report:
+  max_entries: 15            # topics that make it into the report
+  sources_per_entry: 5       # top N sources fed to the LLM and listed per entry
+  min_sources_per_entry: 1
