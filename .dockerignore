@@ -1,4 +1,4 @@
-# Root build context is only used by backend/Dockerfile; send just what it copies.
+# Shared by Dockerfile and Dockerfile.test; send only what they copy.
 *
 !backend/requirements.txt
 !backend/requirements-dev.txt
@@ -6,4 +6,8 @@
 !backend/app
 !backend/tests
 !config
+!frontend/package.json
+!frontend/src
+!frontend/test
+!nginx/nginx.conf
 **/__pycache__

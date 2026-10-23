@@ -31,7 +31,7 @@ docker compose up -d --build
 docker compose exec renderer node src/main.js generate   # first render now instead of waiting for 08:00
 ```
 
-The site is served on `http://localhost:${HTTP_PORT}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images, so re-run `docker compose up -d --build` after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
+The site is served on `http://localhost:${HTTP_PORT}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so re-run `docker compose up -d --build` after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
 
 ## Development
 
@@ -39,6 +39,7 @@ The site is served on `http://localhost:${HTTP_PORT}`. `config/sources.yaml` and
 python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt
 (cd backend && ../.venv/bin/python -m pytest)
 (cd frontend && npm test)          # Node >= 20, no npm dependencies
+docker compose build && docker build -f Dockerfile.test --target backend .   # CI checks (or --target renderer)
 
 set -a; . ./.env; set +a
 (cd backend && ../.venv/bin/uvicorn app.main:create_app --factory --port 8000)
@@ -56,7 +57,7 @@ set -a; . ./.env; set +a
 
 ## CI/CD (Jenkins)
 
-`Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → lint/tests (`docker build --target test` per Dockerfile) → teardown → build & deploy → health check → smoke test via nginx. It reports every build to Discord.
+`Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → build images → lint/tests (`Dockerfile.test`, on top of the built images) → teardown → deploy → health check → smoke test via nginx. It reports every build to Discord.
 
 Non-secret runtime settings (`TZ`, `HTTP_PORT`, `LLM_*`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
 
@@ -66,4 +67,4 @@ Non-secret runtime settings (`TZ`, `HTTP_PORT`, `LLM_*`) are set in the `environ
 | `llama_cpp-llm-api-key` | `LLM_API_KEY` (any placeholder works for Ollama) |
 | `discord-pws-builds-channel-webhook` | Discord webhook for build alerts |
 
-The agent needs Docker with the compose plugin and the Discord Notifier plugin. Jenkins can run in a container against the host's docker daemon: checks run as a `test` stage inside each Dockerfile (sources travel as the build context, and cached layers skip unchanged dependency installs), and the stack uses no host bind mounts. Report history lives in the `pws-news_reports` and `pws-news_site` docker volumes, so wiping the workspace is safe; never run `docker compose down -v` on the agent.
+The agent needs Docker with the buildx and compose plugins, and the Discord Notifier plugin. Jenkins can run in a container against the host's docker daemon: checks are built by `Dockerfile.test` on top of the deploy images (sources travel as the build context, and cached layers skip unchanged dependency installs and tests), and the stack uses no host bind mounts. Report history lives in the `pws-news_reports` and `pws-news_site` docker volumes, so wiping the workspace is safe; never run `docker compose down -v` on the agent.

@@ -1,0 +1,15 @@
+# Lint and tests, run against the exact images built from ./Dockerfile (build those first: docker compose build).
+# Usage: docker build -f Dockerfile.test --target backend .   (or --target renderer)
+ARG BACKEND_IMAGE=pws-news-backend
+ARG RENDERER_IMAGE=pws-news-renderer
+
+FROM ${BACKEND_IMAGE} AS backend
+COPY backend/requirements-dev.txt .
+RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements-dev.txt
+COPY backend/pytest.ini .
+COPY backend/tests ./tests
+RUN ruff check --no-cache --select E9,F . && python -m pytest -q -p no:cacheprovider
+
+FROM ${RENDERER_IMAGE} AS renderer
+COPY frontend/test ./test
+RUN find src test -name "*.js" -print0 | xargs -0 -n1 node --check && npm test --silent

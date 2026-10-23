@@ -7,6 +7,7 @@ See README.md for architecture and commands.
 - `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → group → score → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history), `main.py` (routes).
 - `frontend/src/`: Node renderer and scheduler. `report-format/` holds ALL page layout and styling. Keep presentation out of `publish.js`, `jobs.js` and `main.js`.
 - `nginx/nginx.conf`: static serving and cache headers.
+- `Dockerfile`: runtime image per service (compose `target:`). `Dockerfile.test`: CI lint/tests layered on those images.
 
 ## Rules
 - New source types: add a `Connector` subclass with `@register("<type>")` and import it in `connectors/__init__.py`. Don't special-case source types in the pipeline.

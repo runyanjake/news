@@ -41,7 +41,8 @@ pipeline {
                     command -v docker >/dev/null || fail "docker is not installed on this agent"
                     docker info >/dev/null 2>&1 || fail "docker daemon is not reachable"
                     docker compose version >/dev/null 2>&1 || fail "docker compose plugin is not installed"
-                    for f in docker-compose.yml config/sources.yaml nginx/nginx.conf; do
+                    docker buildx version >/dev/null 2>&1 || fail "docker buildx plugin is not installed (needed for BuildKit)"
+                    for f in docker-compose.yml Dockerfile Dockerfile.test config/sources.yaml nginx/nginx.conf; do
                         [ -f "$f" ] || fail "missing required file: $f"
                     done
 
@@ -58,16 +59,25 @@ pipeline {
             }
         }
 
-        // Each Dockerfile has a `test` stage built on the shipped runtime layers. Sources reach the daemon as the
-        // build context (never a bind mount, which breaks when Jenkins itself runs in a container), and layer
-        // caching skips dependency installs, and even passing tests, whose inputs haven't changed.
+        stage('Build') {
+            steps {
+                sh '''#!/bin/bash
+                    set -euo pipefail
+                    docker compose build --pull || { echo "BUILD ERROR: image build failed" >&2; exit 1; }
+                '''
+            }
+        }
+
+        // Dockerfile.test layers lint and tests onto the images just built, so the checks run on exactly what deploys.
+        // Sources reach the daemon as the build context (bind mounts break when Jenkins runs in a container), and
+        // layer caching skips dependency installs, and even passing tests, whose inputs haven't changed.
         stage('Lint & Test') {
             parallel {
                 stage('Backend') {
                     steps {
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            docker build --pull --progress=plain --target test -f backend/Dockerfile . \
+                            docker build --progress=plain -f Dockerfile.test --target backend . \
                                 || { echo "LINT ERROR: backend lint, tests or config validation failed" >&2; exit 1; }
                         '''
                     }
@@ -76,7 +86,7 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            docker build --pull --progress=plain --target test frontend \
+                            docker build --progress=plain -f Dockerfile.test --target renderer . \
                                 || { echo "LINT ERROR: frontend syntax check or tests failed" >&2; exit 1; }
                         '''
                     }
@@ -94,12 +104,11 @@ pipeline {
             }
         }
 
-        stage('Build & Deploy') {
+        stage('Deploy') {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    docker compose build --pull || { echo "BUILD ERROR: image build failed" >&2; exit 1; }
-                    docker compose up -d || { echo "DEPLOY ERROR: containers failed to start" >&2; exit 1; }
+                    docker compose up -d --no-build || { echo "DEPLOY ERROR: containers failed to start" >&2; exit 1; }
                 '''
             }
         }

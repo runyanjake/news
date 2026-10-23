@@ -1,11 +1,13 @@
 # No host bind mounts: CI runs compose from inside the Jenkins container against the host's docker daemon,
 # where workspace paths don't exist. Config is baked into the images (rebuild after editing it) and
 # report history lives in named volumes, which survive `docker compose down` (but not `down -v`).
+# Images are named so Dockerfile.test can run the checks on top of them.
 services:
   backend:
+    image: pws-news-backend
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      target: backend
     env_file: .env
     environment:
       REPORTS_DIR: /data/reports
@@ -16,7 +18,10 @@ services:
     restart: unless-stopped
 
   renderer:
-    build: ./frontend
+    image: pws-news-renderer
+    build:
+      context: .
+      target: renderer
     env_file: .env
     environment:
       BACKEND_URL: http://backend:8000
@@ -28,7 +33,10 @@ services:
     restart: unless-stopped
 
   nginx:
-    build: ./nginx
+    image: pws-news-nginx
+    build:
+      context: .
+      target: nginx
     ports:
       - "${HTTP_PORT:-8080}:80"
     volumes:
