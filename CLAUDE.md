@@ -4,9 +4,9 @@ See README.md for architecture and commands.
 
 ## Layout
 - `config/sources.yaml`: the only place sources and pipeline/scoring/report knobs are configured. Secrets are referenced as `${ENV}` and live in `.env`.
-- `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → group → score → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history), `main.py` (routes).
+- `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → group → score → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history: `<date>.json` is the newest generation, `generations/<date>/<stamp>.json` keeps every one), `main.py` (routes).
 - `frontend/src/`: Node renderer and scheduler. `report-format/` holds ALL page layout and styling. Keep presentation out of `publish.js`, `jobs.js` and `main.js`.
-- `nginx/nginx.conf`: static serving and cache headers.
+- `nginx/nginx.conf`: static serving and cache headers. Pages that are rewritten in place (front page, `/reports/<date>/`, indexes) must stay `no-cache`, and don't re-enable `open_file_cache`, or readers see stale pages after a new generation.
 - `Dockerfile`: runtime image per service (compose `target:`). `Dockerfile.test`: CI lint/tests layered on those images.
 
 ## Rules

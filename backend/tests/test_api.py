@@ -84,3 +84,20 @@ def test_generate_failure_is_reported(settings, monkeypatch):
     with TestClient(create_app(settings)) as client:
         client.post("/api/reports/generate", headers={"X-Admin-Token": "tok"})
         assert _wait_for_job(client)["last_error"] == "all feeds down"
+
+
+def test_every_generation_is_kept(settings):
+    store = ReportStore(settings.reports_dir)
+    morning = Report(date="2026-10-22", generated_at=datetime(2026, 10, 22, 15, tzinfo=timezone.utc), entries=[])
+    evening = morning.model_copy(update={"generated_at": datetime(2026, 10, 22, 23, 30, tzinfo=timezone.utc)})
+    store.save(evening)
+    store.save(morning)  # an older generation arriving late does not replace the current one
+    client = TestClient(create_app(settings))
+
+    assert client.get("/api/reports/2026-10-22").json()["generated_at"].startswith("2026-10-22T23:30")
+    assert client.get("/api/reports/2026-10-22/generations").json() == ["20261022T233000Z", "20261022T150000Z"]
+    old = client.get("/api/reports/2026-10-22/generations/20261022T150000Z").json()
+    assert old["generated_at"].startswith("2026-10-22T15:00")
+    assert client.get("/api/reports/2026-10-22/generations/20261022T000000Z").status_code == 404
+    assert client.get("/api/reports/2026-10-22/generations/..%2Fx").status_code in (400, 404)
+    assert client.get("/api/reports/2026-10-21/generations").json() == []

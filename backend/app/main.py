@@ -50,6 +50,23 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
             raise HTTPException(404, f"No report for {date}")
         return report
 
+    @app.get("/api/reports/{date}/generations")
+    def list_generations(date: str) -> list[str]:
+        try:
+            return store.generations(date)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+
+    @app.get("/api/reports/{date}/generations/{stamp}", response_model=Report)
+    def get_generation(date: str, stamp: str) -> Report:
+        try:
+            report = store.get_generation(date, stamp)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+        if report is None:
+            raise HTTPException(404, f"No generation {stamp} for {date}")
+        return report
+
     job = {"running": False, "last_date": None, "last_error": None}
     tasks: set[asyncio.Task] = set()
 

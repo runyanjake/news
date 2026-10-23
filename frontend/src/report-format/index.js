@@ -64,8 +64,17 @@ export function renderReport(report) {
   return page(`${SITE_NAME} — ${report.date}`, body);
 }
 
-export function renderArchive(dates) {
-  const items = dates.map((d) => `<li><a href="/reports/${escape(d)}/">${escape(d)}</a></li>`).join('\n');
+/** "20261022T233000Z" -> "23:30 UTC" */
+const stampTime = (stamp) => `${stamp.slice(9, 11)}:${stamp.slice(11, 13)} UTC`;
+
+/** `days`: [{date, stamps}] newest first; earlier generations of a date are listed under it. */
+export function renderArchive(days) {
+  const items = days.map(({ date, stamps }) => {
+    const runs = stamps.length > 1
+      ? `<ul>${stamps.map((s) => `<li><a href="/archive/${escape(date)}/${escape(s)}/">${escape(stampTime(s))}</a></li>`).join('')}</ul>`
+      : '';
+    return `<li><a href="/reports/${escape(date)}/">${escape(date)}</a>${runs}</li>`;
+  }).join('\n');
   return page(`${SITE_NAME} — Archive`, `<h2>Archive</h2><ul class="archive">${items}</ul>`);
 }
 
