@@ -1,36 +1,147 @@
 # Sources and pipeline tuning. `type` names a connector in backend/app/connectors/; "${NAME}" values come from .env.
 
 sources:
+  # World
   - id: guardian-world
     name: The Guardian World
     type: rss
     url: https://www.theguardian.com/world/rss
     reputation: 0.85         # 0.0–1.0 editorial weight used in scoring
+    tags: [world]            # metadata only for now
   - id: aljazeera
     name: Al Jazeera
     type: rss
     url: https://www.aljazeera.com/xml/rss/all.xml
     reputation: 0.8
+    tags: [world]
   - id: bbc-world
     name: BBC World
     type: rss
     url: https://feeds.bbci.co.uk/news/world/rss.xml
     reputation: 0.85
+    tags: [world]
   - id: npr-news
     name: NPR News
     type: rss
     url: https://feeds.npr.org/1001/rss.xml
     reputation: 0.8
-  - id: hn-front
-    name: Hacker News
+    tags: [world]
+  - id: wsj-world
+    name: The Wall Street Journal
     type: rss
-    url: https://hnrss.org/frontpage
-    reputation: 0.6
+    url: https://feeds.content.dowjones.io/public/rss/RSSWorldNews
+    reputation: 0.85
+    tags: [world, business]
+
+  # Engineering & technology
   - id: ars-technica
     name: Ars Technica
     type: rss
     url: https://feeds.arstechnica.com/arstechnica/index
     reputation: 0.75
+    tags: [technology]
+  - id: the-verge
+    name: The Verge
+    type: rss
+    url: https://www.theverge.com/rss/index.xml
+    reputation: 0.7
+    tags: [technology]
+  - id: hn-front
+    name: Hacker News
+    type: rss
+    url: https://news.ycombinator.com/rss
+    reputation: 0.6
+    tags: [technology, engineering]
+  - id: infoworld
+    name: InfoWorld
+    type: rss
+    url: https://www.infoworld.com/feed
+    reputation: 0.65
+    tags: [technology, engineering]
+  - id: techxplore
+    name: TechXplore
+    type: rss
+    url: https://techxplore.com/rss-feed/
+    reputation: 0.6
+    tags: [technology, engineering]
+  - id: github-blog
+    name: GitHub Blog
+    type: rss
+    url: https://github.blog/feed/
+    reputation: 0.6
+    tags: [engineering]
+
+  # Business & economy
+  - id: bloomberg-markets
+    name: Bloomberg
+    type: rss
+    url: https://feeds.bloomberg.com/markets/news.rss
+    reputation: 0.85
+    tags: [business, markets]
+  - id: ft-home
+    name: Financial Times
+    type: rss
+    url: https://www.ft.com/rss/home/uk
+    reputation: 0.85
+    tags: [business, economy]
+  - id: forbes-business
+    name: Forbes
+    type: rss
+    url: https://www.forbes.com/business/feed/
+    reputation: 0.65
+    tags: [business]
+  - id: hbr
+    name: Harvard Business Review
+    type: rss
+    url: http://feeds.hbr.org/harvardbusiness
+    reputation: 0.7
+    tags: [business, management]
+
+  # Startups & venture capital
+  - id: techcrunch
+    name: TechCrunch
+    type: rss
+    url: https://techcrunch.com/feed/
+    reputation: 0.7
+    tags: [startups, technology]
+  - id: venturebeat
+    name: VentureBeat
+    type: rss
+    url: https://venturebeat.com/feed/
+    reputation: 0.65
+    tags: [startups, technology]
+  - id: a16z
+    name: Andreessen Horowitz
+    type: rss
+    url: https://www.a16z.news/feed
+    reputation: 0.55
+    tags: [startups, venture-capital]
+  - id: saastr
+    name: SaaStr
+    type: rss
+    url: https://www.saastr.com/feed/
+    reputation: 0.5
+    tags: [startups]
+
+  # Science & innovation
+  - id: mit-tech-review
+    name: MIT Technology Review
+    type: rss
+    url: https://www.technologyreview.com/feed/
+    reputation: 0.8
+    tags: [science, technology]
+  - id: quanta
+    name: Quanta Magazine
+    type: rss
+    url: https://www.quantamagazine.org/feed/
+    reputation: 0.8
+    tags: [science]
+  - id: nature-news
+    name: Nature
+    type: rss
+    url: https://www.nature.com/nature.rss
+    reputation: 0.9
+    tags: [science]
 
 pipeline:
   max_age_hours: 36          # ignore items older than this

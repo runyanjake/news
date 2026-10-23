@@ -22,7 +22,9 @@ RSS = b"""<?xml version="1.0"?>
 def test_repo_config_is_valid():
     config = load_config(REPO_CONFIG)
     assert config.sources
+    assert len({s.id for s in config.sources}) == len(config.sources)
     for source in config.sources:
+        assert source.tags
         build_connector(source)  # every configured type must be registered
 
 

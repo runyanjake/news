@@ -11,6 +11,7 @@ class SourceConfig(BaseModel):
     type: str
     url: str | None = None
     reputation: float = Field(default=0.5, ge=0.0, le=1.0)
+    tags: list[str] = Field(default_factory=list)
     enabled: bool = True
     options: dict = Field(default_factory=dict)
 

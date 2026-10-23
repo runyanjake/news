@@ -31,6 +31,18 @@ describe('report format', () => {
     assert.match(html, /class="columns"[\s\S]*Second story/);
   });
 
+  it('keeps the top story as lead and mixes the rest the same way on every render', () => {
+    const entries = ['Lead story', ...Array.from({ length: 12 }, (_, i) => `Story ${i}`)].map((t) => entry(t));
+    const order = (html) => [...html.matchAll(/class="tagline"[^>]*>([^<]+)</g)].map((m) => m[1]);
+    const rendered = order(renderReport(report('2026-10-22', entries)));
+
+    assert.equal(rendered[0], 'Lead story');
+    assert.deepEqual([...rendered].sort(), entries.map((e) => e.tagline).sort());
+    assert.deepEqual(order(renderReport(report('2026-10-22', entries))), rendered);
+    const regenerated = { ...report('2026-10-22', entries), generated_at: '2026-10-22T23:30:00Z' };
+    assert.notDeepEqual(order(renderReport(regenerated)), rendered);
+  });
+
   it('centers the lead source list as a left-aligned block', () => {
     const html = renderReport(report('2026-10-22'));
     assert.match(html, /class="lead"[\s\S]*<ul class="sources">/);

@@ -1,6 +1,7 @@
 // All page layout lives here and in styles.css; input is the backend Report JSON (backend/app/models.py).
 import { readFileSync } from 'node:fs';
 import { escape, safeUrl } from './html.js';
+import { shuffled } from './shuffle.js';
 
 const SITE_NAME = 'PWS NEWS';
 const STYLES = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
@@ -39,7 +40,7 @@ ${sourceList(entry.sources)}
 </article>`;
 }
 
-/** Split entries round-robin into `count` columns, preserving rank order across rows. */
+/** Split entries round-robin into `count` columns, keeping their order across rows. */
 function columns(entries, count) {
   const cols = Array.from({ length: count }, () => []);
   entries.forEach((entry, i) => cols[i % count].push(entryHtml(entry, 'entry')));
@@ -47,7 +48,9 @@ function columns(entries, count) {
 }
 
 export function renderReport(report) {
-  const [lead, ...rest] = report.entries;
+  const [lead, ...ranked] = report.entries;
+  // The top story leads; the rest are mixed so similar topics don't cluster. Seeding keeps re-renders identical.
+  const rest = shuffled(ranked, report.generated_at);
   const date = new Date(`${report.date}T00:00:00`).toDateString();
   const body = lead
     ? `<p class="date">${escape(date)}</p>
