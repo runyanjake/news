@@ -31,6 +31,12 @@ describe('report format', () => {
     assert.match(html, /class="columns"[\s\S]*Second story/);
   });
 
+  it('centers the lead source list as a left-aligned block', () => {
+    const html = renderReport(report('2026-10-22'));
+    assert.match(html, /class="lead"[\s\S]*<ul class="sources">/);
+    assert.match(html, /\.lead \.sources \{[^}]*display: inline-block;[^}]*text-align: left;/);
+  });
+
   it('escapes feed content and rejects non-http links', () => {
     const html = renderReport(report('2026-10-22', [entry('<script>x</script>', 'javascript:alert(1)')]));
     assert.ok(!html.includes('<script>x'));
