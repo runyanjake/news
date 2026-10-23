@@ -144,7 +144,8 @@ pipeline {
                     set -euo pipefail
                     fail() { echo "SMOKE TEST ERROR: $*" >&2; exit 1; }
                     # Requests go through nginx so the proxy and static config are exercised too.
-                    fetch() { docker compose exec -T nginx wget -qO- "http://localhost$1"; }
+                    # 127.0.0.1, not localhost: alpine resolves localhost to ::1 first, and nginx listens on IPv4 only.
+                    fetch() { docker compose exec -T nginx wget -qO- "http://127.0.0.1$1"; }
 
                     health=$(fetch /api/health) || fail "GET /api/health via nginx failed"
                     echo "$health" | grep -q '"status":"ok"' || fail "unexpected /api/health response: $health"
