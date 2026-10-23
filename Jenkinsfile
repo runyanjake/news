@@ -12,7 +12,7 @@ pipeline {
         TZ                   = 'America/Los_Angeles'
         RENDER_TIME          = '08:00'
         HTTP_PORT            = '8080'
-        LLM_BASE_URL         = 'http://host.docker.internal:11434/v1'
+        LLM_BASE_URL         = 'http://llm-server:8080/v1'
         LLM_MODEL            = 'llama3.1'
         LLM_TIMEOUT_SECONDS  = '120'
         PYTHON_IMAGE         = 'python:3.12-slim'
