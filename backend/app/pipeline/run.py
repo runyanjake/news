@@ -2,14 +2,15 @@
 
 import asyncio
 import logging
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from ..config import AppConfig
+from ..config import AppConfig, ReportConfig
 from ..connectors import Connector, build_connector
 from ..llm import LLMClient
-from ..models import Article, Report
+from ..models import Article, Report, Topic
 from .grouping import group_articles
 from .scoring import best_per_source, score_topics
 from .summarize import summarize_topic
@@ -41,6 +42,24 @@ async def collect(config: AppConfig, connectors: list[Connector], now: datetime)
     return articles
 
 
+def select_topics(ranked: list[Topic], config: ReportConfig) -> list[tuple[Topic, list[Article]]]:
+    """Best topics with their top sources, capping each section (the top source's first tag)."""
+    cap = config.max_entries_per_tag
+    selected, per_tag = [], Counter()
+    for topic in ranked:
+        top = best_per_source(topic)[: config.sources_per_entry]
+        if len(top) < config.min_sources_per_entry:
+            continue
+        section = top[0].tags[0] if top[0].tags else None
+        if section and cap is not None and per_tag[section] >= cap:
+            continue
+        per_tag[section] += 1
+        selected.append((topic, top))
+        if len(selected) == config.max_entries:
+            break
+    return selected
+
+
 async def generate_report(
     config: AppConfig,
     llm: LLMClient | None,
@@ -59,14 +78,7 @@ async def generate_report(
     per_entry = config.report.sources_per_entry
     ranked = score_topics(topics, config.scoring, now, per_entry)
 
-    selected = []
-    for topic in ranked:
-        top = best_per_source(topic)[:per_entry]
-        if len(top) >= config.report.min_sources_per_entry:
-            selected.append((topic, top))
-        if len(selected) == config.report.max_entries:
-            break
-
+    selected = select_topics(ranked, config.report)
     semaphore = asyncio.Semaphore(LLM_CONCURRENCY)
 
     async def summarize(topic, top):

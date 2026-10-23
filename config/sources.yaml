@@ -164,3 +164,4 @@ report:
   max_entries: 15            # topics that make it into the report
   sources_per_entry: 5       # top N sources fed to the LLM and listed per entry
   min_sources_per_entry: 1
+  max_entries_per_tag: 4     # per section (top source's first tag); omit for no cap

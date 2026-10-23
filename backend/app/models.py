@@ -26,6 +26,7 @@ class Article(BaseModel):
     summary: str = ""
     published_at: datetime | None = None
     reputation: float = 0.5
+    tags: list[str] = Field(default_factory=list)
     score: float = 0.0
 
 

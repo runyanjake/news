@@ -39,6 +39,7 @@ class ReportConfig(BaseModel):
     max_entries: int = 15
     sources_per_entry: int = 5
     min_sources_per_entry: int = 1
+    max_entries_per_tag: int | None = None
 
 
 class AppConfig(BaseModel):

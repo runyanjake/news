@@ -9,8 +9,9 @@ from app.models import Article, SourceConfig
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
 
-def article(title, source="a", reputation=0.5, hours_old=1.0, url=None, summary=""):
+def article(title, source="a", reputation=0.5, hours_old=1.0, url=None, summary="", tags=()):
     return Article(
+        tags=list(tags),
         source_id=source,
         source_name=source.upper(),
         title=title,

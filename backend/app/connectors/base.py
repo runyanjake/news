@@ -22,6 +22,7 @@ class Connector(ABC):
             source_id=self.source.id,
             source_name=self.source.name,
             reputation=self.source.reputation,
+            tags=self.source.tags,
             **fields,
         )
 

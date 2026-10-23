@@ -1,8 +1,10 @@
 import asyncio
 
-from app.config import AppConfig, GroupingConfig, ScoringConfig, TopicRule
+from app.config import AppConfig, GroupingConfig, ReportConfig, ScoringConfig, TopicRule
+from app.models import Topic
 from app.pipeline import generate_report
 from app.pipeline.grouping import group_articles, group_by_keywords
+from app.pipeline.run import select_topics
 from app.pipeline.scoring import score_topics
 
 from .conftest import NOW, FailingConnector, FakeLLM, StaticConnector, article
@@ -102,3 +104,15 @@ def test_min_sources_filters_thin_topics(fake_llm):
         generate_report(_config(min_sources_per_entry=2), fake_llm, "2026-10-22", connectors, NOW)
     )
     assert report.entries == []
+
+
+def test_select_topics_caps_entries_per_section():
+    world = [Topic(name=f"W{i}", articles=[article(f"W{i}", tags=["world", "business"])], score=10 - i)
+             for i in range(3)]
+    tech = Topic(name="T", articles=[article("T", tags=["technology"])], score=1)
+    untagged = [Topic(name=f"U{i}", articles=[article(f"U{i}")], score=0) for i in range(2)]
+    config = ReportConfig(max_entries=5, max_entries_per_tag=2)
+
+    selected = select_topics([*world, tech, *untagged], config)
+
+    assert [topic.name for topic, _ in selected] == ["W0", "W1", "T", "U0", "U1"]
