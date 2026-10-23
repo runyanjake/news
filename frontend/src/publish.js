@@ -4,10 +4,11 @@
  *   <siteDir>/index.html               latest report
  *   <siteDir>/reports/<date>/index.html every report ever rendered (history)
  *   <siteDir>/archive/index.html        list of dates
+ *   <siteDir>/privacy/index.html        privacy policy and disclaimer
  */
 import { mkdir, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { renderArchive, renderReport } from './report-format/index.js';
+import { renderArchive, renderPrivacy, renderReport } from './report-format/index.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -37,4 +38,5 @@ export async function publishReport(siteDir, report) {
   const dates = await renderedDates(siteDir);
   if (dates[0] === report.date) await writeAtomic(path.join(siteDir, 'index.html'), html);
   await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(dates));
+  await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy());
 }
