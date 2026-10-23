@@ -4,6 +4,8 @@
  *   node src/main.js generate   generate + render once now
  *   node src/main.js rebuild    re-render all stored reports with the current format
  */
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { createBackend } from './backend.js';
 import { generateAndPublish, rebuildAll } from './jobs.js';
 import { msUntilNext } from './schedule.js';
@@ -34,7 +36,28 @@ async function runWithRetries() {
   }
 }
 
+/** A fresh site volume has no front page until the first daily run; render one at startup instead. */
+async function ensureFrontPage() {
+  if (existsSync(path.join(siteDir, 'index.html'))) return;
+  let dates;
+  for (let attempt = 1; !dates; attempt++) {
+    try {
+      dates = await backend.listDates();
+    } catch (err) {
+      if (attempt >= 30) return log(`No front page and backend unreachable: ${err.message}`);
+      await sleep(2_000);
+    }
+  }
+  if (dates.length) {
+    log(`No front page; re-rendered ${await rebuildAll(backend, siteDir)} stored reports`);
+  } else {
+    log('No front page and no stored reports; generating one now');
+    await runWithRetries();
+  }
+}
+
 async function schedulerLoop() {
+  await ensureFrontPage();
   log(`Scheduler started; rendering daily at ${renderTime} (TZ=${env.TZ ?? 'system'})`);
   for (;;) {
     const wait = msUntilNext(new Date(), renderTime);

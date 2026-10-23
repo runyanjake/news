@@ -29,7 +29,7 @@ Report layout lives only in `frontend/src/report-format/`. After changing it, ru
 cp .env.example .env   # set ADMIN_TOKEN, TZ, LLM_BASE_URL / LLM_MODEL
 docker network create traefik && docker network create ai   # once; production joins the existing networks
 docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
-docker compose exec renderer node src/main.js generate   # first render now instead of waiting for 08:00
+docker compose exec renderer node src/main.js generate   # force a new report now (a fresh deploy renders one on startup)
 ```
 
 In production Traefik serves the site at `https://${NEWS_HOST}`; nginx publishes no host port. Locally, `docker-compose.local.yml` publishes it on `http://localhost:${HTTP_PORT:-8080}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so rebuild after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
