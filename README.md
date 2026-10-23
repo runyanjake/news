@@ -63,7 +63,7 @@ Generation is blocked at nginx, so call the backend directly from a container on
 ```sh
 set -a; . ./.env; set +a   # loads ADMIN_TOKEN
 docker run --rm --network news curlimages/curl -sS -X POST -H "X-Admin-Token: $ADMIN_TOKEN" http://pws-news-backend:8000/api/reports/generate
-docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/api/jobs/generate   # poll until "running": false
+docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/api/jobs/generate
 ```
 
 Against a backend started with `uvicorn` (see Development), use `http://localhost:8000` with plain `curl`. Each generation becomes that date's current report; earlier ones stay in its history. The renderer checks `/api/reports/latest` every `RENDER_WATCH_SECONDS` (default 60) and re-renders when `generated_at` changes, so the site picks up the new report within a minute. `docker exec pws-news-renderer node src/main.js generate` generates and renders in one step instead.
