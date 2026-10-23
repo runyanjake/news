@@ -15,5 +15,6 @@ a:visited { color: #551a8b; }
 .entry p { margin: .4rem 0; }
 .sources { font-size: .8rem; color: #555; padding-left: 1rem; margin: .3rem 0; }
 .sources a { color: #555; }
+.lead .sources { display: inline-block; text-align: left; max-width: 760px; margin: .3rem auto; }
 footer { border-top: 1px solid #111; margin-top: 2rem; padding-top: .5rem; font-size: .85rem; text-align: center; }
 .archive li { font-family: monospace; margin: .3rem 0; }
