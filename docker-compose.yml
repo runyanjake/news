@@ -1,13 +1,16 @@
+# No host bind mounts: CI runs compose from inside the Jenkins container against the host's docker daemon,
+# where workspace paths don't exist. Config is baked into the images (rebuild after editing it) and
+# report history lives in named volumes, which survive `docker compose down` (but not `down -v`).
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     env_file: .env
     environment:
-      SOURCES_FILE: /app/config/sources.yaml
       REPORTS_DIR: /data/reports
     volumes:
-      - ./config:/app/config:ro
-      - ./data/reports:/data/reports
+      - reports:/data/reports
     extra_hosts:
       - "host.docker.internal:host-gateway"  # reach an LLM server running on the host
     restart: unless-stopped
@@ -19,18 +22,21 @@ services:
       BACKEND_URL: http://backend:8000
       SITE_DIR: /srv/site
     volumes:
-      - ./data/site:/srv/site
+      - site:/srv/site
     depends_on:
       - backend
     restart: unless-stopped
 
   nginx:
-    image: nginx:1.27-alpine
+    build: ./nginx
     ports:
       - "${HTTP_PORT:-8080}:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./data/site:/srv/site:ro
+      - site:/srv/site:ro
     depends_on:
       - backend
     restart: unless-stopped
+
+volumes:
+  reports:
+  site:

@@ -15,9 +15,7 @@ pipeline {
         LLM_BASE_URL         = 'http://llm-server:8080/v1'
         LLM_MODEL            = 'llama3.1'
         LLM_TIMEOUT_SECONDS  = '120'
-        PYTHON_IMAGE         = 'python:3.12-slim'
-        NODE_IMAGE           = 'node:20-slim'
-        RUFF_VERSION         = '0.17.2'
+        DOCKER_BUILDKIT      = '1'
 
         ADMIN_TOKEN          = credentials('news-admin-token')
         LLM_API_KEY          = credentials('llama_cpp-llm-api-key')
@@ -56,25 +54,21 @@ pipeline {
                     } > .env
 
                     docker compose config --quiet || fail "docker-compose.yml is invalid"
-                    docker run --rm -v "$WORKSPACE:/src:ro" -w /src/backend -e PYTHONDONTWRITEBYTECODE=1 "$PYTHON_IMAGE" sh -c '
-                        pip install --quiet --disable-pip-version-check --root-user-action=ignore -r requirements.txt &&
-                        python -c "from app.config import load_config; c = load_config(\\"/src/config/sources.yaml\\"); assert c.sources, \\"no sources configured\\""
-                    ' || fail "config/sources.yaml is malformed"
                 '''
             }
         }
 
-        stage('Lint & Type-check') {
+        // Each Dockerfile has a `test` stage built on the shipped runtime layers. Sources reach the daemon as the
+        // build context (never a bind mount, which breaks when Jenkins itself runs in a container), and layer
+        // caching skips dependency installs, and even passing tests, whose inputs haven't changed.
+        stage('Lint & Test') {
             parallel {
                 stage('Backend') {
                     steps {
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            docker run --rm -v "$WORKSPACE/backend:/src:ro" -w /src -e PYTHONDONTWRITEBYTECODE=1 "$PYTHON_IMAGE" sh -c "
-                                pip install --quiet --disable-pip-version-check --root-user-action=ignore -r requirements-dev.txt ruff==$RUFF_VERSION &&
-                                ruff check --no-cache --select E9,F . &&
-                                python -m pytest -q -p no:cacheprovider
-                            " || { echo "LINT ERROR: backend lint or tests failed" >&2; exit 1; }
+                            docker build --pull --progress=plain --target test -f backend/Dockerfile . \
+                                || { echo "LINT ERROR: backend lint, tests or config validation failed" >&2; exit 1; }
                         '''
                     }
                 }
@@ -82,10 +76,8 @@ pipeline {
                     steps {
                         sh '''#!/bin/bash
                             set -euo pipefail
-                            docker run --rm -v "$WORKSPACE/frontend:/src:ro" -w /src "$NODE_IMAGE" sh -c '
-                                find src test -name "*.js" -print0 | xargs -0 -n1 node --check &&
-                                npm test --silent
-                            ' || { echo "LINT ERROR: frontend syntax check or tests failed" >&2; exit 1; }
+                            docker build --pull --progress=plain --target test frontend \
+                                || { echo "LINT ERROR: frontend syntax check or tests failed" >&2; exit 1; }
                         '''
                     }
                 }
@@ -106,7 +98,6 @@ pipeline {
             steps {
                 sh '''#!/bin/bash
                     set -euo pipefail
-                    mkdir -p data/reports data/site
                     docker compose build --pull || { echo "BUILD ERROR: image build failed" >&2; exit 1; }
                     docker compose up -d || { echo "DEPLOY ERROR: containers failed to start" >&2; exit 1; }
                 '''

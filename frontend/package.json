@@ -9,6 +9,6 @@
     "start": "node src/main.js",
     "generate": "node src/main.js generate",
     "rebuild": "node src/main.js rebuild",
-    "test": "node --test test/"
+    "test": "node --test"
   }
 }

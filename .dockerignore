@@ -1,0 +1,9 @@
+# Root build context is only used by backend/Dockerfile; send just what it copies.
+*
+!backend/requirements.txt
+!backend/requirements-dev.txt
+!backend/pytest.ini
+!backend/app
+!backend/tests
+!config
+**/__pycache__

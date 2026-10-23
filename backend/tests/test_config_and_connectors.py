@@ -1,13 +1,13 @@
-from pathlib import Path
-
 import pytest
 
 from app.config import load_config
 from app.connectors import build_connector
 from app.connectors.rss import RSSConnector
 from app.models import SourceConfig
+from app.settings import load_settings
 
-REPO_CONFIG = Path(__file__).resolve().parents[2] / "config" / "sources.yaml"
+# The deployed config: config/sources.yaml in a checkout, or SOURCES_FILE inside the image.
+REPO_CONFIG = load_settings().sources_file
 
 RSS = b"""<?xml version="1.0"?>
 <rss version="2.0"><channel><title>T</title>
