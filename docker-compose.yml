@@ -1,9 +1,16 @@
-# No host bind mounts: CI runs compose from inside the Jenkins container against the host's docker daemon,
-# where workspace paths don't exist. Config is baked into the images (rebuild after editing it) and
-# report history lives in named volumes, which survive `docker compose down` (but not `down -v`).
-# Images are named so Dockerfile.test can run the checks on top of them.
+networks:
+  news:
+    name: news
+    driver: bridge
+    internal: true
+  ai:
+    external: true
+  traefik:
+    external: true
+
 services:
   backend:
+    container_name: pws-news-backend
     image: pws-news-backend
     build:
       context: .
@@ -13,34 +20,48 @@ services:
       REPORTS_DIR: /data/reports
     volumes:
       - reports:/data/reports
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # reach an LLM server running on the host
+    networks:
+      - news
+      - ai
+    labels:
+      - traefik.enable=false
     restart: unless-stopped
 
   renderer:
+    container_name: pws-news-renderer
     image: pws-news-renderer
     build:
       context: .
       target: renderer
     env_file: .env
     environment:
-      BACKEND_URL: http://backend:8000
+      BACKEND_URL: http://pws-news-backend:8000
       SITE_DIR: /srv/site
     volumes:
       - site:/srv/site
+    networks:
+      - news
     depends_on:
       - backend
     restart: unless-stopped
 
   nginx:
+    container_name: pws-news-nginx
     image: pws-news-nginx
     build:
       context: .
       target: nginx
-    ports:
-      - "${HTTP_PORT:-8080}:80"
     volumes:
       - site:/srv/site:ro
+    networks:
+      - news
+      - traefik
+    labels:
+      - traefik.docker.network=traefik
+      - traefik.http.routers.pws-news.rule=Host(`${NEWS_HOST}`)
+      - traefik.http.routers.pws-news.tls=true
+      - traefik.http.routers.pws-news.tls.certresolver=lets-encrypt
+      - traefik.http.services.pws-news.loadbalancer.server.port=80
     depends_on:
       - backend
     restart: unless-stopped

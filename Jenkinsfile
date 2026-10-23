@@ -11,7 +11,7 @@ pipeline {
         COMPOSE_PROJECT_NAME = 'pws-news'
         TZ                   = 'America/Los_Angeles'
         RENDER_TIME          = '08:00'
-        HTTP_PORT            = '8080'
+        NEWS_HOST            = 'news.whitney.rip'
         LLM_BASE_URL         = 'http://llm-server:8080/v1'
         LLM_MODEL            = 'llama3.1'
         LLM_TIMEOUT_SECONDS  = '120'
@@ -42,6 +42,9 @@ pipeline {
                     docker info >/dev/null 2>&1 || fail "docker daemon is not reachable"
                     docker compose version >/dev/null 2>&1 || fail "docker compose plugin is not installed"
                     docker buildx version >/dev/null 2>&1 || fail "docker buildx plugin is not installed (needed for BuildKit)"
+                    for net in traefik ai; do
+                        docker network inspect "$net" >/dev/null 2>&1 || fail "docker network '$net' does not exist"
+                    done
                     for f in docker-compose.yml Dockerfile Dockerfile.test config/sources.yaml nginx/nginx.conf; do
                         [ -f "$f" ] || fail "missing required file: $f"
                     done
@@ -49,7 +52,7 @@ pipeline {
                     # docker-compose.yml loads runtime config from .env; regenerate it from Jenkins on every build.
                     umask 077
                     {
-                        for var in TZ RENDER_TIME ADMIN_TOKEN LLM_BASE_URL LLM_MODEL LLM_API_KEY LLM_TIMEOUT_SECONDS HTTP_PORT; do
+                        for var in TZ RENDER_TIME ADMIN_TOKEN LLM_BASE_URL LLM_MODEL LLM_API_KEY LLM_TIMEOUT_SECONDS NEWS_HOST; do
                             printf '%s=%s\\n' "$var" "${!var}"
                         done
                     } > .env

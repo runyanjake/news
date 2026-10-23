@@ -27,11 +27,12 @@ Report layout lives only in `frontend/src/report-format/`. After changing it, ru
 
 ```sh
 cp .env.example .env   # set ADMIN_TOKEN, TZ, LLM_BASE_URL / LLM_MODEL
-docker compose up -d --build
+docker network create traefik && docker network create ai   # once; production joins the existing networks
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 docker compose exec renderer node src/main.js generate   # first render now instead of waiting for 08:00
 ```
 
-The site is served on `http://localhost:${HTTP_PORT}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so re-run `docker compose up -d --build` after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
+In production Traefik serves the site at `https://${NEWS_HOST}`; nginx publishes no host port. Locally, `docker-compose.local.yml` publishes it on `http://localhost:${HTTP_PORT:-8080}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so rebuild after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
 
 ## Development
 
@@ -59,7 +60,7 @@ set -a; . ./.env; set +a
 
 `Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → build images → lint/tests (`Dockerfile.test`, on top of the built images) → teardown → deploy → health check → smoke test via nginx. It reports every build to Discord.
 
-Non-secret runtime settings (`TZ`, `HTTP_PORT`, `LLM_*`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
+Non-secret runtime settings (`TZ`, `NEWS_HOST`, `LLM_*`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
 
 | Credential ID | Used as |
 | --- | --- |
@@ -67,4 +68,4 @@ Non-secret runtime settings (`TZ`, `HTTP_PORT`, `LLM_*`) are set in the `environ
 | `llama_cpp-llm-api-key` | `LLM_API_KEY` (any placeholder works for Ollama) |
 | `discord-pws-builds-channel-webhook` | Discord webhook for build alerts |
 
-The agent needs Docker with the buildx and compose plugins, and the Discord Notifier plugin. Jenkins can run in a container against the host's docker daemon: checks are built by `Dockerfile.test` on top of the deploy images (sources travel as the build context, and cached layers skip unchanged dependency installs and tests), and the stack uses no host bind mounts. Report history lives in the `pws-news_reports` and `pws-news_site` docker volumes, so wiping the workspace is safe; never run `docker compose down -v` on the agent.
+The agent needs Docker with the buildx and compose plugins, the Discord Notifier plugin, and the external `traefik` (the site is routed by Traefik at `NEWS_HOST`) and `ai` (where `llm-server` lives) docker networks. Jenkins can run in a container against the host's docker daemon: checks are built by `Dockerfile.test` on top of the deploy images (sources travel as the build context, and cached layers skip unchanged dependency installs and tests), and the stack uses no host bind mounts. Report history lives in the `pws-news_reports` and `pws-news_site` docker volumes, so wiping the workspace is safe; never run `docker compose down -v` on the agent.
