@@ -70,14 +70,42 @@ describe('publishReport', () => {
     assert.match(await readFile(path.join(dir, 'privacy/index.html'), 'utf8'), /Privacy Policy/);
   });
 
+  it('keeps every generation and shows only the newest by timestamp', async () => {
+    const at = (time, tagline) => ({ ...report('2026-10-22', [entry(tagline)]), generated_at: `2026-10-22T${time}Z` });
+    const front = () => readFile(path.join(dir, 'index.html'), 'utf8');
+    await publishReport(dir, at('15:00:00', 'Morning'));
+    await publishReport(dir, at('23:30:00', 'Evening'));
+    await publishReport(dir, at('09:00:00', 'Early re-render')); // older generation must not take over
+
+    assert.match(await front(), /Evening/);
+    assert.match(await readFile(path.join(dir, 'reports/2026-10-22/index.html'), 'utf8'), /Evening/);
+    for (const [stamp, tagline] of [['20261022T150000Z', 'Morning'], ['20261022T090000Z', 'Early re-render']]) {
+      assert.match(await readFile(path.join(dir, `archive/2026-10-22/${stamp}/index.html`), 'utf8'), new RegExp(tagline));
+    }
+    const archive = await readFile(path.join(dir, 'archive/index.html'), 'utf8');
+    assert.ok(archive.indexOf('20261022T233000Z') < archive.indexOf('20261022T150000Z'));
+
+    await publishReport(dir, report('2026-10-21', [entry('Yesterday')]));
+    assert.match(await front(), /Evening/);
+  });
+
   it('rejects unsafe dates', async () => {
     await assert.rejects(publishReport(dir, report('../../etc')), /Invalid report date/);
   });
 
   it('rebuildAll re-renders every stored report', async () => {
     const stored = { '2026-10-21': report('2026-10-21'), '2026-10-22': report('2026-10-22') };
-    const backend = { listDates: async () => Object.keys(stored).reverse(), getReport: async (d) => stored[d] };
+    const evening = { ...report('2026-10-22', [entry('Evening')]), generated_at: '2026-10-22T23:00:00Z' };
+    const generations = { '2026-10-22': { '20261022T230000Z': evening, '20261022T150000Z': stored['2026-10-22'] } };
+    const backend = {
+      listDates: async () => Object.keys(stored).reverse(),
+      getReport: async (d) => stored[d],
+      listGenerations: async (d) => Object.keys(generations[d] ?? {}),
+      getGeneration: async (d, s) => generations[d][s],
+    };
     assert.equal(await rebuildAll(backend, dir), 2);
+    await readFile(path.join(dir, 'archive/2026-10-22/20261022T150000Z/index.html'));
+    assert.match(await readFile(path.join(dir, 'index.html'), 'utf8'), /Evening/);
     await readFile(path.join(dir, 'reports/2026-10-21/index.html'));
     assert.match(await readFile(path.join(dir, 'index.html'), 'utf8'), /2026-10-22/);
   });

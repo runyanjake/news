@@ -1,16 +1,23 @@
 /**
  * Writes rendered pages into the static site directory nginx serves:
  *
- *   <siteDir>/index.html               latest report
- *   <siteDir>/reports/<date>/index.html every report ever rendered (history)
- *   <siteDir>/archive/index.html        list of dates
- *   <siteDir>/privacy/index.html        privacy policy and disclaimer
+ *   <siteDir>/index.html                        newest generation of the newest date
+ *   <siteDir>/reports/<date>/index.html         newest generation of each date
+ *   <siteDir>/archive/<date>/<stamp>/index.html every generation ever rendered (history)
+ *   <siteDir>/archive/index.html                list of dates and their generations
+ *   <siteDir>/privacy/index.html                privacy policy and disclaimer
  */
 import { mkdir, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { renderArchive, renderPrivacy, renderReport } from './report-format/index.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
+const STAMP = /^\d{8}T\d{6}Z$/;
+
+/** UTC generated_at as YYYYMMDDTHHMMSSZ, matching the backend's generation stamps. */
+export function generationStamp(report) {
+  return new Date(report.generated_at).toISOString().replace(/\.\d+Z$/, 'Z').replace(/[-:]/g, '');
+}
 
 async function writeAtomic(file, contents) {
   await mkdir(path.dirname(file), { recursive: true });
@@ -19,24 +26,41 @@ async function writeAtomic(file, contents) {
   await rename(tmp, file);
 }
 
-async function renderedDates(siteDir) {
+async function list(dir, pattern) {
   try {
-    const names = await readdir(path.join(siteDir, 'reports'));
-    return names.filter((n) => DATE.test(n)).sort().reverse();
+    return (await readdir(dir)).filter((n) => pattern.test(n)).sort().reverse();
   } catch (err) {
     if (err.code === 'ENOENT') return [];
     throw err;
   }
 }
 
-/** Render one report into history; refresh the front page if it is the newest. */
+/** Rendered dates, newest first, each with its generation stamps newest first. */
+async function renderedHistory(siteDir) {
+  const dates = new Set([
+    ...(await list(path.join(siteDir, 'reports'), DATE)),
+    ...(await list(path.join(siteDir, 'archive'), DATE)),
+  ]);
+  const days = [];
+  for (const date of [...dates].sort().reverse()) {
+    days.push({ date, stamps: await list(path.join(siteDir, 'archive', date), STAMP) });
+  }
+  return days;
+}
+
+/** Render one generation into history; make it current for its date and the front page if it is the newest. */
 export async function publishReport(siteDir, report) {
   if (!DATE.test(report.date)) throw new Error(`Invalid report date: ${report.date}`);
+  const stamp = generationStamp(report);
   const html = renderReport(report);
-  await writeAtomic(path.join(siteDir, 'reports', report.date, 'index.html'), html);
+  await writeAtomic(path.join(siteDir, 'archive', report.date, stamp, 'index.html'), html);
 
-  const dates = await renderedDates(siteDir);
-  if (dates[0] === report.date) await writeAtomic(path.join(siteDir, 'index.html'), html);
-  await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(dates));
+  const days = await renderedHistory(siteDir);
+  const day = days.find((d) => d.date === report.date);
+  if (day.stamps[0] === stamp) {
+    await writeAtomic(path.join(siteDir, 'reports', report.date, 'index.html'), html);
+    if (days[0] === day) await writeAtomic(path.join(siteDir, 'index.html'), html);
+  }
+  await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(days));
   await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy());
 }

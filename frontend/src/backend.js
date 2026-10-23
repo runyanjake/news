@@ -25,5 +25,12 @@ export function createBackend({ baseUrl, adminToken, fetchImpl = fetch, pollMs =
     throw new Error(`Generation did not finish within ${maxWaitMs / 60_000} min`);
   }
 
-  return { generate, getReport, listDates: () => call('/api/reports') };
+  return {
+    generate,
+    getReport,
+    listDates: () => call('/api/reports'),
+    listGenerations: (date) => call(`/api/reports/${encodeURIComponent(date)}/generations`),
+    getGeneration: (date, stamp) =>
+      call(`/api/reports/${encodeURIComponent(date)}/generations/${encodeURIComponent(stamp)}`),
+  };
 }
