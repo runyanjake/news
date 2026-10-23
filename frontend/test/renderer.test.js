@@ -5,7 +5,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import { createBackend } from '../src/backend.js';
-import { rebuildAll } from '../src/jobs.js';
+import { publishLatestIfNew, rebuildAll } from '../src/jobs.js';
 import { publishReport } from '../src/publish.js';
 import { renderPrivacy, renderReport } from '../src/report-format/index.js';
 import { msUntilNext } from '../src/schedule.js';
@@ -80,6 +80,24 @@ describe('publishReport', () => {
     assert.equal(await rebuildAll(backend, dir), 2);
     await readFile(path.join(dir, 'reports/2026-10-21/index.html'));
     assert.match(await readFile(path.join(dir, 'index.html'), 'utf8'), /2026-10-22/);
+  });
+
+  it('publishLatestIfNew renders a regenerated report once', async () => {
+    let latest = report('2026-10-22', [entry('First run')]);
+    const backend = { getReport: async (d) => (d === 'latest' ? latest : null) };
+    const front = () => readFile(path.join(dir, 'index.html'), 'utf8');
+
+    let renderedAt = await publishLatestIfNew(backend, dir, null);
+    assert.match(await front(), /First run/);
+
+    latest = { ...report('2026-10-22', [entry('Second run')]), generated_at: '2026-10-22T18:00:00Z' };
+    renderedAt = await publishLatestIfNew(backend, dir, renderedAt);
+    assert.equal(renderedAt, '2026-10-22T18:00:00Z');
+    assert.match(await front(), /Second run/);
+
+    await rm(path.join(dir, 'index.html'));
+    assert.equal(await publishLatestIfNew(backend, dir, renderedAt), renderedAt);
+    await assert.rejects(front()); // unchanged report is not re-rendered
   });
 });
 

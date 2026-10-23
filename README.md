@@ -56,6 +56,17 @@ set -a; . ./.env; set +a
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status |
 
+Generation is blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):
+
+```sh
+set -a; . ./.env; set +a   # loads ADMIN_TOKEN
+docker run --rm --network news curlimages/curl -sS -X POST \
+  -H "X-Admin-Token: $ADMIN_TOKEN" http://pws-news-backend:8000/api/reports/generate
+docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/api/jobs/generate   # poll until "running": false
+```
+
+Against a backend started with `uvicorn` (see Development), use `http://localhost:8000` with plain `curl`. Each generation overwrites that date's report JSON. The renderer checks `/api/reports/latest` every `RENDER_WATCH_SECONDS` (default 60) and re-renders when `generated_at` changes, so the site picks up the new report within a minute. `docker exec pws-news-renderer node src/main.js generate` generates and renders in one step instead.
+
 ## CI/CD (Jenkins)
 
 `Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → build images → lint/tests (`Dockerfile.test`, on top of the built images) → teardown → deploy → health check → smoke test via nginx. It reports every build to Discord.

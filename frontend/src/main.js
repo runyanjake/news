@@ -7,7 +7,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { createBackend } from './backend.js';
-import { generateAndPublish, rebuildAll } from './jobs.js';
+import { generateAndPublish, publishLatestIfNew, rebuildAll } from './jobs.js';
 import { msUntilNext } from './schedule.js';
 
 const env = process.env;
@@ -15,6 +15,7 @@ const siteDir = env.SITE_DIR ?? new URL('../../data/site', import.meta.url).path
 const renderTime = env.RENDER_TIME ?? '08:00';
 const retryMinutes = Number(env.RENDER_RETRY_MINUTES ?? 10);
 const maxAttempts = Number(env.RENDER_MAX_ATTEMPTS ?? 3);
+const watchSeconds = Number(env.RENDER_WATCH_SECONDS ?? 60);
 const backend = createBackend({
   baseUrl: env.BACKEND_URL ?? 'http://localhost:8000',
   adminToken: env.ADMIN_TOKEN ?? '',
@@ -22,11 +23,13 @@ const backend = createBackend({
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...args) => console.log(new Date().toISOString(), ...args);
+let renderedAt = null; // generated_at of the newest report this process has rendered
 
 async function runWithRetries() {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const report = await generateAndPublish(backend, siteDir);
+      renderedAt = report.generated_at;
       log(`Published ${report.date} (${report.entries.length} entries)`);
       return;
     } catch (err) {
@@ -56,6 +59,20 @@ async function ensureFrontPage() {
   }
 }
 
+/** Pick up reports generated outside the daily run (e.g. POST /api/reports/generate). */
+async function watchLoop() {
+  for (;;) {
+    try {
+      const previous = renderedAt;
+      renderedAt = await publishLatestIfNew(backend, siteDir, renderedAt);
+      if (renderedAt !== previous) log(`Rendered latest report (generated ${renderedAt})`);
+    } catch (err) {
+      if (!err.message.includes('-> 404')) log(`Watching for new reports failed: ${err.message}`);
+    }
+    await sleep(watchSeconds * 1_000);
+  }
+}
+
 async function schedulerLoop() {
   await ensureFrontPage();
   log(`Scheduler started; rendering daily at ${renderTime} (TZ=${env.TZ ?? 'system'})`);
@@ -69,6 +86,7 @@ async function schedulerLoop() {
 
 const command = process.argv[2] ?? 'schedule';
 if (command === 'schedule') {
+  watchLoop();
   await schedulerLoop();
 } else if (command === 'generate') {
   const report = await generateAndPublish(backend, siteDir);
