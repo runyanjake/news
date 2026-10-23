@@ -6,8 +6,8 @@ sources:
     name: The Guardian World
     type: rss
     url: https://www.theguardian.com/world/rss
-    reputation: 0.85         # 0.0–1.0 editorial weight used in scoring
-    tags: [world]            # metadata only for now
+    reputation: 0.85
+    tags: [world]
   - id: aljazeera
     name: Al Jazeera
     type: rss

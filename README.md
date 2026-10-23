@@ -62,8 +62,7 @@ Generation is blocked at nginx, so call the backend directly from a container on
 
 ```sh
 set -a; . ./.env; set +a   # loads ADMIN_TOKEN
-docker run --rm --network news curlimages/curl -sS -X POST \
-  -H "X-Admin-Token: $ADMIN_TOKEN" http://pws-news-backend:8000/api/reports/generate
+docker run --rm --network news curlimages/curl -sS -X POST -H "X-Admin-Token: $ADMIN_TOKEN" http://pws-news-backend:8000/api/reports/generate
 docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/api/jobs/generate   # poll until "running": false
 ```
 
