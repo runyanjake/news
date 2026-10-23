@@ -19,8 +19,8 @@ pipeline {
         NODE_IMAGE           = 'node:20-slim'
         RUFF_VERSION         = '0.17.2'
 
-        ADMIN_TOKEN          = credentials('pws-news-admin-token')
-        LLM_API_KEY          = credentials('pws-news-llm-api-key')
+        ADMIN_TOKEN          = credentials('news-admin-token')
+        LLM_API_KEY          = credentials('llama_cpp-llm-api-key')
         DISCORD_WEBHOOK      = credentials('discord-pws-builds-channel-webhook')
     }
 
