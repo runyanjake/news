@@ -45,7 +45,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         try:
             report = store.get(date)
         except ValueError as exc:
-            raise HTTPException(400, str(exc))
+            raise HTTPException(400, str(exc)) from exc
         if report is None:
             raise HTTPException(404, f"No report for {date}")
         return report

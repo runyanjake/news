@@ -1,11 +1,7 @@
-/**
- * Entrypoint.
- *   node src/main.js            run the daily scheduler (default RENDER_TIME 08:00, local TZ)
- *   node src/main.js generate   generate + render once now
- *   node src/main.js rebuild    re-render all stored reports with the current format
- */
+// Usage: node src/main.js [schedule (default) | generate (once, now) | rebuild (re-render all reports)]
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createBackend } from './backend.js';
 import { generateAndPublish, publishLatestIfNew, rebuildAll } from './jobs.js';
 import { msUntilNext } from './schedule.js';
@@ -21,7 +17,6 @@ const backend = createBackend({
   adminToken: env.ADMIN_TOKEN ?? '',
 });
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const log = (...args) => console.log(new Date().toISOString(), ...args);
 let renderedAt = null; // generated_at of the newest report this process has rendered
 

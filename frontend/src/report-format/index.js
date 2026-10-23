@@ -1,11 +1,4 @@
-/**
- * Report presentation — the ONE place that decides how a report looks.
- *
- * Input is the backend's Report JSON ({date, generated_at, entries: [{topic,
- * tagline, summary, score, ai_generated, sources: [{name, title, url}]}]}).
- * Change layout, ordering, sections or styling here (and in styles.css);
- * nothing else in the renderer knows about the page structure.
- */
+// All page layout lives here and in styles.css; input is the backend Report JSON (backend/app/models.py).
 import { readFileSync } from 'node:fs';
 import { escape, safeUrl } from './html.js';
 

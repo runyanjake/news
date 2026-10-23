@@ -71,9 +71,7 @@ pipeline {
             }
         }
 
-        // Dockerfile.test layers lint and tests onto the images just built, so the checks run on exactly what deploys.
-        // Sources reach the daemon as the build context (bind mounts break when Jenkins runs in a container), and
-        // layer caching skips dependency installs, and even passing tests, whose inputs haven't changed.
+        // Checks build on the deploy images via the build context; bind mounts break when Jenkins runs in a container.
         stage('Lint & Test') {
             parallel {
                 stage('Backend') {

@@ -7,10 +7,7 @@ export async function generateAndPublish(backend, siteDir) {
   return report;
 }
 
-/**
- * Render the newest stored report unless it is the one already rendered, so reports generated
- * outside the renderer (e.g. a direct API call) reach the site. Returns the rendered generated_at.
- */
+/** Render the newest stored report if it isn't `renderedAt`; returns the generated_at now on the site. */
 export async function publishLatestIfNew(backend, siteDir, renderedAt) {
   const report = await backend.getReport('latest');
   if (report.generated_at === renderedAt) return renderedAt;

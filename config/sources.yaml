@@ -1,18 +1,11 @@
-# PWS News — single source of truth for media sources and pipeline tuning.
-#
-# Each source names a connector `type` (see backend/app/connectors/). Add a new
-# kind of feed by writing a connector class and registering it under a new type;
-# no other code needs to change. Values like "${SOME_TOKEN}" are read from the
-# environment so secrets stay in .env.
-#
-# reputation: 0.0–1.0 editorial weight used when scoring sources.
+# Sources and pipeline tuning. `type` names a connector in backend/app/connectors/; "${NAME}" values come from .env.
 
 sources:
   - id: guardian-world
     name: The Guardian World
     type: rss
     url: https://www.theguardian.com/world/rss
-    reputation: 0.85
+    reputation: 0.85         # 0.0–1.0 editorial weight used in scoring
   - id: aljazeera
     name: Al Jazeera
     type: rss
@@ -38,33 +31,16 @@ sources:
     type: rss
     url: https://feeds.arstechnica.com/arstechnica/index
     reputation: 0.75
-  # Example of a future non-RSS connector (no implementation yet):
-  # - id: some-twitter-list
-  #   name: Curated X list
-  #   type: twitter
-  #   reputation: 0.5
-  #   options:
-  #     list_id: "123"
-  #     bearer_token: "${TWITTER_BEARER_TOKEN}"
 
 pipeline:
   max_age_hours: 36          # ignore items older than this
   max_items_per_source: 30
 
 grouping:
-  # "keywords": manual topic rules below, then title-similarity clustering.
-  # "llm":      ask the LLM to cluster; falls back to "keywords" on failure.
-  method: keywords
+  method: keywords           # "keywords" (rules + title similarity) or "llm" (falls back to keywords)
   similarity_threshold: 0.25
-  # Manual buckets: any article whose title contains a keyword joins that topic.
-  # Keep them story-sized (an ongoing event), not broad sections, or unrelated
-  # stories get summarised together.
+  # Keep rules story-sized, e.g. {name: Ukraine War, keywords: [ukraine, kyiv]}; broad ones merge unrelated stories.
   topics: []
-  # topics:
-  #   - name: Ukraine War
-  #     keywords: [ukraine, kyiv, zelensky]
-  #   - name: Federal Reserve
-  #     keywords: [fed, powell, fomc]
 
 scoring:
   weights:

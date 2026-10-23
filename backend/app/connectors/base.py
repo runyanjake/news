@@ -1,14 +1,4 @@
-"""Common connector interface and type registry.
-
-A connector turns one configured source into a list of normalised Articles.
-To add a new kind of source (Twitter/X API, a JSON API, a scraper...):
-
-    @register("twitter")
-    class TwitterConnector(Connector):
-        async def fetch(self, client): ...
-
-then reference `type: twitter` in config/sources.yaml.
-"""
+"""Connector interface and registry; @register("<type>") makes a type usable in config/sources.yaml."""
 
 from abc import ABC, abstractmethod
 
@@ -48,5 +38,5 @@ def build_connector(source: SourceConfig) -> Connector:
     try:
         cls = _REGISTRY[source.type]
     except KeyError:
-        raise ValueError(f"Unknown connector type {source.type!r} for source {source.id!r}")
+        raise ValueError(f"Unknown connector type {source.type!r} for source {source.id!r}") from None
     return cls(source)

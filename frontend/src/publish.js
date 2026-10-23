@@ -1,11 +1,4 @@
-/**
- * Writes rendered pages into the static site directory nginx serves:
- *
- *   <siteDir>/index.html               latest report
- *   <siteDir>/reports/<date>/index.html every report ever rendered (history)
- *   <siteDir>/archive/index.html        list of dates
- *   <siteDir>/privacy/index.html        privacy policy and disclaimer
- */
+// Site layout: index.html (latest), reports/<date>/, archive/ and privacy/, each an index.html nginx serves.
 import { mkdir, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { renderArchive, renderPrivacy, renderReport } from './report-format/index.js';

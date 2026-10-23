@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,7 +27,7 @@ def settings(tmp_path):
 
 
 def _report(date):
-    return Report(date=date, generated_at=datetime(2026, 1, 1, tzinfo=timezone.utc), entries=[])
+    return Report(date=date, generated_at=datetime(2026, 1, 1, tzinfo=UTC), entries=[])
 
 
 def test_reports_history(settings):

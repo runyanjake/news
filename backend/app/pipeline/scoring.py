@@ -36,20 +36,17 @@ def best_per_source(topic: Topic) -> list[Article]:
 def score_topics(
     topics: list[Topic], config: ScoringConfig, now: datetime, sources_per_entry: int
 ) -> list[Topic]:
-    """Mutates scores in place and returns topics ranked best first.
-
-    A topic's score sums its best article per source (capped at N sources), so a
-    story carried by several reputable outlets outranks a single-source item.
-    """
-    w = config.weights
+    """Mutates scores in place and returns topics ranked best first."""
+    weights = config.weights
     for topic in topics:
         for article in topic.articles:
             article.score = round(
-                w.get("reputation", 0) * article.reputation
-                + w.get("recency", 0) * recency(article, now, config.recency_half_life_hours)
-                + w.get("relevance", 0) * relevance(article, topic),
+                weights.get("reputation", 0) * article.reputation
+                + weights.get("recency", 0) * recency(article, now, config.recency_half_life_hours)
+                + weights.get("relevance", 0) * relevance(article, topic),
                 4,
             )
         topic.articles.sort(key=lambda a: a.score, reverse=True)
+        # Summing the best article per source lets multi-outlet stories outrank single-source ones.
         topic.score = round(sum(a.score for a in best_per_source(topic)[:sources_per_entry]), 4)
     return sorted(topics, key=lambda t: t.score, reverse=True)

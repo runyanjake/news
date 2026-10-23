@@ -1,6 +1,6 @@
-/** Thin client for the FastAPI backend. */
+import { setTimeout as sleep } from 'node:timers/promises';
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Thin client for the FastAPI backend. */
 
 export function createBackend({ baseUrl, adminToken, fetchImpl = fetch, pollMs = 10_000, maxWaitMs = 60 * 60_000 }) {
   async function call(pathname, init = {}) {

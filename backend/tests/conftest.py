@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -6,7 +6,7 @@ from app.connectors import Connector
 from app.llm import LLMError
 from app.models import Article, SourceConfig
 
-NOW = datetime(2026, 10, 22, 15, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
 
 def article(title, source="a", reputation=0.5, hours_old=1.0, url=None, summary=""):

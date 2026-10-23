@@ -1,5 +1,4 @@
-# Runtime images for every service, one stage each; docker-compose.yml selects them with `target:`.
-# Dockerfile.test builds the CI checks on top of these images.
+# One runtime stage per service, selected by `target:` in docker-compose.yml.
 
 FROM python:3.12-slim AS backend
 WORKDIR /app

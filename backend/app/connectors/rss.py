@@ -3,7 +3,7 @@
 import calendar
 import html
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import feedparser
 import httpx
@@ -24,7 +24,7 @@ def _published(entry) -> datetime | None:
     parsed = entry.get("published_parsed") or entry.get("updated_parsed")
     if not parsed:
         return None
-    return datetime.fromtimestamp(calendar.timegm(parsed), tz=timezone.utc)
+    return datetime.fromtimestamp(calendar.timegm(parsed), tz=UTC)
 
 
 @register("rss")
