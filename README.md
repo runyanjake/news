@@ -19,7 +19,7 @@ flowchart LR
 2. **Group**: articles are bucketed into topics. The `keywords` method applies manual rules from the config, then title-similarity clustering. The `llm` method asks the LLM to cluster, and falls back to `keywords` if that fails.
 3. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. A topic's score is the sum of its best article from each source, so stories covered by several outlets rank higher.
 4. **Summarise**: the top N sources of each top topic go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
-5. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every rendering is kept under `data/site/reports/<date>/`. nginx serves the files with cache headers and proxies read-only `/api/` calls through a response cache.
+5. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
 
 Report layout lives only in `frontend/src/report-format/`. After changing it, run `npm run rebuild` to re-render the whole history from the stored JSON.
 
@@ -53,6 +53,8 @@ set -a; . ./.env; set +a
 | --- | --- | --- |
 | GET | `/api/reports` | stored report dates, newest first |
 | GET | `/api/reports/latest`, `/api/reports/{date}` | report JSON |
+| GET | `/api/reports/{date}/generations` | generation stamps for a date (`YYYYMMDDTHHMMSSZ`, UTC), newest first |
+| GET | `/api/reports/{date}/generations/{stamp}` | one generation's report JSON |
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status |
 
@@ -65,7 +67,7 @@ docker run --rm --network news curlimages/curl -sS -X POST \
 docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/api/jobs/generate   # poll until "running": false
 ```
 
-Against a backend started with `uvicorn` (see Development), use `http://localhost:8000` with plain `curl`. Each generation overwrites that date's report JSON. The renderer checks `/api/reports/latest` every `RENDER_WATCH_SECONDS` (default 60) and re-renders when `generated_at` changes, so the site picks up the new report within a minute. `docker exec pws-news-renderer node src/main.js generate` generates and renders in one step instead.
+Against a backend started with `uvicorn` (see Development), use `http://localhost:8000` with plain `curl`. Each generation becomes that date's current report; earlier ones stay in its history. The renderer checks `/api/reports/latest` every `RENDER_WATCH_SECONDS` (default 60) and re-renders when `generated_at` changes, so the site picks up the new report within a minute. `docker exec pws-news-renderer node src/main.js generate` generates and renders in one step instead.
 
 ## CI/CD (Jenkins)
 

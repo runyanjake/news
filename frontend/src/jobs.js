@@ -15,11 +15,15 @@ export async function publishLatestIfNew(backend, siteDir, renderedAt) {
   return report.generated_at;
 }
 
-/** Re-render every stored report, e.g. after changing the report format. */
+/** Re-render every stored generation, oldest first, e.g. after changing the report format. Returns the date count. */
 export async function rebuildAll(backend, siteDir) {
   const dates = await backend.listDates();
   for (const date of [...dates].reverse()) {
-    await publishReport(siteDir, await backend.getReport(date));
+    const stamps = await backend.listGenerations(date);
+    if (!stamps.length) await publishReport(siteDir, await backend.getReport(date)); // stored before history existed
+    for (const stamp of [...stamps].reverse()) {
+      await publishReport(siteDir, await backend.getGeneration(date, stamp));
+    }
   }
   return dates.length;
 }
