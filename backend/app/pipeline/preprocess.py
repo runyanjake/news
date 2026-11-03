@@ -10,15 +10,51 @@ from datetime import datetime, timedelta
 
 from ..config import PipelineConfig
 from ..models import Article
-from .text import canonical_url, tokens
+from .text import canonical_url, tfidf_vectors, tokens
 
 log = logging.getLogger(__name__)
+
+SUMMARY_CHARS = 600  # how much of each summary feeds the comparison vector (as for the LLM prompt)
+BOILERPLATE_SHARE = 0.4  # a word in this share of one source's items is that feed's boilerplate
 
 
 def annotate(article: Article) -> Article:
     article.url_key = canonical_url(article.url)
     article.words = frozenset(tokens(article.title))
     return article
+
+
+def _boilerplate(articles: list[Article], bodies: list[set[str]]) -> dict[str, set[str]]:
+    """Per source, words in most of its items (e.g. Nature's "doi 10.1038", HN's "comments")."""
+    by_source: dict[str, list[set[str]]] = {}
+    for article, body in zip(articles, bodies, strict=True):
+        by_source.setdefault(article.source_id, []).append(set(article.words) | body)
+    common = {}
+    for source_id, docs in by_source.items():
+        if len(docs) < 3:
+            common[source_id] = set()
+            continue
+        counts: dict[str, int] = {}
+        for doc in docs:
+            for word in doc:
+                counts[word] = counts.get(word, 0) + 1
+        common[source_id] = {w for w, n in counts.items() if n >= BOILERPLATE_SHARE * len(docs)}
+    return common
+
+
+def weigh_terms(articles: list[Article]) -> None:
+    """Attach TF-IDF vectors; weights depend on the whole day's articles, so run it on all of them.
+
+    Each feed's boilerplate words are left out so they can't make unrelated items look alike.
+    """
+    bodies = [tokens(a.summary[:SUMMARY_CHARS]) for a in articles]
+    boilerplate = _boilerplate(articles, bodies)
+    docs = [
+        (set(a.words) - boilerplate[a.source_id], body - boilerplate[a.source_id])
+        for a, body in zip(articles, bodies, strict=True)
+    ]
+    for article, vector in zip(articles, tfidf_vectors(docs), strict=True):
+        article.vector = vector
 
 
 def _unique_in_feed(articles: list[Article]) -> list[Article]:
@@ -77,5 +113,6 @@ def preprocess(
         counts["items"], len(kept), counts["stale"], counts["repeated"], counts["over cap"],
         counts["duplicate"],
     )
+    weigh_terms(kept)
     # Newest first, so any downstream truncation (e.g. LLM grouping) drops stale items.
     return sorted(kept, key=lambda a: a.published_at or cutoff, reverse=True)

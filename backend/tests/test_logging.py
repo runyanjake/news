@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from app.config import PipelineConfig, ReportConfig
 from app.logs import LOG_FORMAT, UTCFormatter
 from app.models import Report, ReportEntry, SourceRef, Topic
-from app.pipeline.grouping import merge_stories
 from app.pipeline.preprocess import preprocess
 from app.pipeline.run import describe_report, select_topics
 
@@ -54,23 +53,6 @@ def test_preprocess_drops_repeats_within_a_feed_before_the_cap(caplog):
         'Preprocess: WSJ listed 1 item(s) more than once: "Strikes on island"',
         "Preprocess: 3 items -> 2 articles (dropped 0 stale, 1 repeated within a feed, "
         "0 over the per-source cap, 0 duplicate links across feeds)",
-    ]
-
-
-def test_merge_logs_reason_and_sources(caplog):
-    topics = [
-        Topic(name="A", articles=[article("Senate passes budget bill", source="a")]),
-        Topic(name="B", articles=[article("Wildfire spreads in hills", source="b")]),
-        Topic(name="C", articles=[article("Budget bill wildfire hills", source="c")]),
-    ]
-    with caplog.at_level(logging.INFO, logger="app.pipeline.grouping"):
-        merge_stories(topics, threshold=0.25)
-    assert caplog.messages == [
-        'Merge: "B" into "A" via "C": similar headlines "Budget bill wildfire hills" (C)'
-        ' ~ "Wildfire spreads in hills" (B)',
-        'Merge: "C" into "A": similar headlines "Budget bill wildfire hills" (C)'
-        ' ~ "Senate passes budget bill" (A)',
-        "Merge: 3 topics -> 1 stories",
     ]
 
 

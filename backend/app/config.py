@@ -25,6 +25,7 @@ class PipelineConfig(BaseModel):
 class GroupingConfig(BaseModel):
     method: str = "keywords"
     similarity_threshold: float = 0.25
+    merge_threshold: float = 0.2
     topics: list[TopicRule] = Field(default_factory=list)
 
 

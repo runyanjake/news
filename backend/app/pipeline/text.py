@@ -1,5 +1,9 @@
-"""Tiny text helpers shared by grouping and scoring."""
+"""Tiny text helpers shared by preprocessing, grouping and scoring.
 
+These only derive comparison keys; they never change the text shown in a report.
+"""
+
+import math
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -11,8 +15,57 @@ STOPWORDS = frozenset(
 )
 
 
+_ACRONYM = re.compile(r"\b(?:[a-z]\.){2,}")  # "u.s." / "u.k." -> "us" / "uk"
+
+
+def _normalise(word: str) -> str:
+    """Fold possessives and plain plurals so "Iran's"/"Iran" and "strikes"/"strike" match."""
+    word = word.strip("'")
+    word = word.removesuffix("'s")
+    if len(word) > 4 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        word = word[:-1]
+    return word
+
+
 def tokens(text: str) -> set[str]:
-    return {w for w in _WORD.findall(text.lower()) if w not in STOPWORDS and len(w) > 1}
+    text = _ACRONYM.sub(lambda m: m.group().replace(".", ""), text.lower().replace("’", "'"))
+    words = (_normalise(w) for w in _WORD.findall(text))
+    return {w for w in words if w not in STOPWORDS and len(w) > 1}
+
+
+Vector = dict[str, float]
+
+
+def tfidf_vectors(docs: list[tuple[set[str], set[str]]], title_weight: float = 2.0) -> list[Vector]:
+    """Unit-length TF-IDF vectors for (title words, body words) documents.
+
+    Words common across the day's coverage (e.g. "election" on election day) weigh
+    little; rare shared words (names, places) carry the match. Title words count extra.
+    """
+    df: dict[str, int] = {}
+    for title, body in docs:
+        for word in title | body:
+            df[word] = df.get(word, 0) + 1
+    n = len(docs)
+    vectors = []
+    for title, body in docs:
+        vec = {w: math.log(n / df[w]) * (title_weight if w in title else 1.0) for w in title | body}
+        norm = math.sqrt(sum(x * x for x in vec.values())) or 1.0
+        vectors.append({w: x / norm for w, x in vec.items() if x})
+    return vectors
+
+
+def add_into(total: Vector, vec: Vector) -> None:
+    for word, x in vec.items():
+        total[word] = total.get(word, 0.0) + x
+
+
+def cosine(a: Vector, b: Vector) -> float:
+    if len(a) > len(b):
+        a, b = b, a
+    dot = sum(x * b.get(w, 0.0) for w, x in a.items())
+    norms = math.sqrt(sum(x * x for x in a.values())) * math.sqrt(sum(x * x for x in b.values()))
+    return dot / norms if norms else 0.0
 
 
 def jaccard(a: set[str], b: set[str]) -> float:

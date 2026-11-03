@@ -30,9 +30,11 @@ class Article(BaseModel):
     reputation: float = 0.5
     tags: list[str] = Field(default_factory=list)
     score: float = 0.0
-    # Set by pipeline.preprocess.annotate; never serialised.
+    # Comparison keys derived in pipeline.preprocess; never serialised and never shown.
+    # title/summary/url above pass through to the report untouched.
     url_key: str = Field(default="", exclude=True)
     words: frozenset[str] = Field(default_factory=frozenset, exclude=True)
+    vector: dict[str, float] = Field(default_factory=dict, exclude=True)  # TF-IDF of title + summary
 
 
 class Topic(BaseModel):
