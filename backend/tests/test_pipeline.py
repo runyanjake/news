@@ -1,9 +1,10 @@
 import asyncio
 
-from app.config import AppConfig, GroupingConfig, ReportConfig, ScoringConfig, TopicRule
+from app.config import AppConfig, GroupingConfig, PipelineConfig, ReportConfig, ScoringConfig, TopicRule
 from app.models import Topic
 from app.pipeline import generate_report
-from app.pipeline.grouping import group_articles, group_by_keywords
+from app.pipeline.grouping import group_articles, group_by_keywords, merge_stories
+from app.pipeline.preprocess import preprocess
 from app.pipeline.run import select_topics
 from app.pipeline.scoring import score_topics
 
@@ -116,3 +117,92 @@ def test_select_topics_caps_entries_per_section():
     selected = select_topics([*world, tech, *untagged], config)
 
     assert [topic.name for topic, _ in selected] == ["W0", "W1", "T", "U0", "U1"]
+
+
+def test_story_split_by_keyword_rule_is_merged():
+    # One outlet's headline matches the rule, another's doesn't; it's still one story.
+    config = GroupingConfig(topics=[TopicRule(name="Economy", keywords=["inflation"])])
+    topics = asyncio.run(
+        group_articles(
+            [
+                article("Inflation cools as Fed holds rates steady", source="a"),
+                article("Fed holds rates steady for third month", source="b"),
+                article("Mars rover finds ancient lake bed", source="c"),
+            ],
+            config,
+            None,
+        )
+    )
+    assert [(t.name, len(t.articles)) for t in topics] == [("Economy", 2), ("Mars rover finds ancient lake bed", 1)]
+
+
+def test_llm_groups_sharing_a_story_are_merged():
+    articles = [
+        article("Senate passes budget bill", source="a"),
+        article("Wildfire spreads in hills", source="b"),
+        article("Budget bill passes Senate", source="c"),
+        article("Same link, different feed", source="d", url="https://x.example/story?utm_source=rss"),
+        article("Unrelated wording entirely", source="e", url="https://www.x.example/story/"),
+    ]
+    llm = FakeLLM({"topics": [
+        {"name": "Politics", "items": [0]},
+        {"name": "Disasters", "items": [1]},
+        {"name": "Congress", "items": [2]},
+        {"name": "One", "items": [3]},
+        {"name": "Two", "items": [4]},
+    ]})
+    topics = asyncio.run(group_articles(articles, GroupingConfig(method="llm"), llm))
+    assert [(t.name, len(t.articles)) for t in topics] == [("Politics", 2), ("Disasters", 1), ("One", 2)]
+
+
+def test_topic_bridging_two_others_collapses_all_three():
+    topics = merge_stories(
+        [
+            Topic(name="A", articles=[article("Senate passes budget bill", source="a")]),
+            Topic(name="B", articles=[article("Wildfire spreads in hills", source="b")]),
+            Topic(name="C", articles=[article("Budget bill wildfire hills", source="c")]),
+        ],
+        threshold=0.25,
+    )
+    assert [(t.name, len(t.articles)) for t in topics] == [("A", 3)]
+
+
+def test_report_has_no_duplicate_stories(fake_llm):
+    connectors = [
+        StaticConnector("a", [article("Inflation cools as Fed holds rates steady", source="a")]),
+        StaticConnector("b", [article("Fed holds rates steady for third month", source="b")]),
+    ]
+    config = AppConfig.model_validate({
+        "sources": [],
+        "grouping": {"topics": [{"name": "Economy", "keywords": ["inflation"]}]},
+        "report": {"max_entries": 5},
+    })
+    report = asyncio.run(generate_report(config, fake_llm, "2026-10-22", connectors, NOW))
+    assert len(report.entries) == 1
+    assert {s.name for s in report.entries[0].sources} == {"A", "B"}
+
+
+def test_same_article_from_two_feeds_counts_once(fake_llm):
+    connectors = [
+        StaticConnector("a", [article("Story", source="a", url="https://x.example/s?utm_medium=rss")]),
+        StaticConnector("b", [article("Story", source="b", url="http://www.x.example/s/#top")]),
+    ]
+    report = asyncio.run(generate_report(_config(), fake_llm, "2026-10-22", connectors, NOW))
+    assert len(report.entries) == 1 and len(report.entries[0].sources) == 1
+
+
+def test_preprocess_keeps_most_reputable_copy_of_an_article():
+    low = article("Story", source="low", reputation=0.3, url="https://x.example/s")
+    high = article("Story", source="high", reputation=0.9, url="https://x.example/s?utm_source=rss")
+    other = article("Other", source="low", url="https://x.example/other")
+    kept = preprocess([[low, other], [high]], PipelineConfig(), NOW)
+    assert sorted(a.source_id + ":" + a.url_key for a in kept) == [
+        "high:x.example/s",
+        "low:x.example/other",
+    ]
+
+
+def test_preprocess_drops_stale_and_caps_per_source():
+    feed = [article(f"Item {i}", source="a") for i in range(5)] + [article("Old", source="a", hours_old=100)]
+    kept = preprocess([feed], PipelineConfig(max_items_per_source=3), NOW)
+    assert [a.title for a in kept] == ["Item 0", "Item 1", "Item 2"]

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from ..config import ScoringConfig
 from ..models import Article, Topic
-from .text import jaccard, tokens
+from .text import jaccard
 
 
 def recency(article: Article, now: datetime, half_life_hours: float) -> float:
@@ -19,8 +19,7 @@ def relevance(article: Article, topic: Topic) -> float:
     peers = [a for a in topic.articles if a is not article]
     if not peers:
         return 0.0
-    words = tokens(article.title)
-    return sum(jaccard(words, tokens(p.title)) for p in peers) / len(peers)
+    return sum(jaccard(article.words, p.words) for p in peers) / len(peers)
 
 
 def best_per_source(topic: Topic) -> list[Article]:

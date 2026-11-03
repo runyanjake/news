@@ -5,12 +5,14 @@ import pytest
 from app.connectors import Connector
 from app.llm import LLMError
 from app.models import Article, SourceConfig
+from app.pipeline.preprocess import annotate
 
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
 
 def article(title, source="a", reputation=0.5, hours_old=1.0, url=None, summary="", tags=()):
-    return Article(
+    """An annotated article, as stages after preprocess expect."""
+    return annotate(Article(
         tags=list(tags),
         source_id=source,
         source_name=source.upper(),
@@ -19,7 +21,7 @@ def article(title, source="a", reputation=0.5, hours_old=1.0, url=None, summary=
         summary=summary,
         published_at=NOW - timedelta(hours=hours_old),
         reputation=reputation,
-    )
+    ))
 
 
 class StaticConnector(Connector):

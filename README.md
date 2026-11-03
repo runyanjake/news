@@ -7,7 +7,7 @@ A news aggregator inspired by https://news.dws.rip, offering a periodically rend
 flowchart LR
   cfg[config/sources.yaml] --> be
   subgraph be[backend · Python/FastAPI]
-    c[connectors] --> g[group into topics] --> s[score sources] --> l[LLM tagline + summary]
+    c[connectors] --> p[preprocess] --> g[group + merge stories] --> s[score sources] --> l[LLM tagline + summary]
   end
   be -- report JSON history --> data1[(data/reports)]
   r[renderer · Node] -- 08:00 daily: generate + poll --> be
@@ -15,11 +15,14 @@ flowchart LR
   data2 --> n[nginx] --> u((readers))
 ```
 
+Steps 1–4 build the context (`build_context` in `backend/app/pipeline/run.py`); step 5 is where the LLM writes the report (`write_entries`).
+
 1. **Collect**: every source in `config/sources.yaml` is fetched by a connector (`backend/app/connectors/`). RSS ships today. Other source types (Twitter/X, JSON APIs) subclass `Connector` and register a new `type`.
-2. **Group**: articles are bucketed into topics. The `keywords` method applies manual rules from the config, then title-similarity clustering. The `llm` method asks the LLM to cluster, and falls back to `keywords` if that fails.
-3. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. A topic's score is the sum of its best article from each source, so stories covered by several outlets rank higher.
-4. **Summarise**: the top N sources of each top topic go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
-5. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
+2. **Preprocess**: drops stale items, caps items per source, and keeps one copy of each article (by URL, ignoring tracking params; the most reputable feed's copy wins). It also annotates each article with the derived fields later stages share. This step only limits what goes into the context.
+3. **Group**: articles are bucketed into topics. The `keywords` method applies manual rules from the config, then title-similarity clustering. The `llm` method asks the LLM to cluster, and falls back to `keywords` if that fails. Topics that cover the same story (a shared URL or similar headlines) are then merged, so each story is one report entry whose sources may come from several groups.
+4. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. A topic's score is the sum of its best article from each source, so stories covered by several outlets rank higher.
+5. **Summarise**: the top N sources of each top topic go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
+6. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
 
 Report layout lives only in `frontend/src/report-format/`. After changing it, run `npm run rebuild` to re-render the whole history from the stored JSON.
 

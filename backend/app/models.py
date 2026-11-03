@@ -28,6 +28,9 @@ class Article(BaseModel):
     reputation: float = 0.5
     tags: list[str] = Field(default_factory=list)
     score: float = 0.0
+    # Set by pipeline.preprocess.annotate; never serialised.
+    url_key: str = Field(default="", exclude=True)
+    words: frozenset[str] = Field(default_factory=frozenset, exclude=True)
 
 
 class Topic(BaseModel):
