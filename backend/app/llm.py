@@ -1,4 +1,4 @@
-"""Minimal client for an OpenAI-compatible chat completions API (Ollama, vLLM, llama.cpp, ...)."""
+"""Minimal client for an OpenAI-compatible API (Ollama, vLLM, llama.cpp, ...): chat and embeddings."""
 
 import json
 import re
@@ -19,8 +19,30 @@ class LLMClient:
         self.api_key = api_key
         self.timeout = timeout
 
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+
+    async def embed(self, texts: list[str], model: str) -> tuple[list[list[float]], int | None]:
+        """One embedding per text, in order, plus the prompt tokens the server reports (if any)."""
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    f"{self.base_url}/embeddings",
+                    json={"model": model, "input": texts},
+                    headers=self._headers(),
+                )
+                response.raise_for_status()
+                body = response.json()
+            rows = sorted(body["data"], key=lambda row: row["index"])
+            vectors = [row["embedding"] for row in rows]
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            raise LLMError(str(exc)) from exc
+        if len(vectors) != len(texts):
+            raise LLMError(f"Asked for {len(texts)} embeddings, got {len(vectors)}")
+        return vectors, (body.get("usage") or {}).get("prompt_tokens")
+
     async def complete(self, system: str, user: str) -> str:
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        headers = self._headers()
         payload = {
             "model": self.model,
             "temperature": 0.2,

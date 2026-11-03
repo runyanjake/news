@@ -16,7 +16,7 @@ from ..connectors import Connector, build_connector
 from ..llm import LLMClient
 from ..models import Article, Report, ReportEntry, Topic
 from .grouping import group_articles
-from .preprocess import preprocess
+from .preprocess import embed_articles, preprocess
 from .scoring import best_per_source, score_topics
 from .summarize import summarize_topic
 
@@ -81,6 +81,7 @@ async def build_context(
     config: AppConfig, llm: LLMClient | None, connectors: list[Connector], now: datetime
 ) -> list[Story]:
     articles = preprocess(await collect(connectors), config.pipeline, now)
+    await embed_articles(articles, llm, config.grouping.embeddings)
     topics = await group_articles(articles, config.grouping, llm)
     ranked = score_topics(topics, config.scoring, now, config.report.sources_per_entry)
     return select_topics(ranked, config.report)

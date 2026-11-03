@@ -1,0 +1,61 @@
+# Labeled pairs from the feeds of 2026-11-03 (election day in the US).
+# a / b: a headline fragment, or {source: <source id>, title: <fragment>} if ambiguous.
+# label: same (one event, should be one entry) | related (follow-up, analysis or sidebar; not scored)
+#        | different (must not merge).
+# Rebuild the fixture after editing:
+#   python -m tests.merge_eval snapshot <saved feeds dir> tests/data/merge/2026-11-03.labels.yaml
+pairs:
+  # Same event, reworded across outlets
+  - {a: "US strikes Iranian island ahead of midterm", b: "Strikes Iran’s Qeshm Island as Trump Talks Down", label: same}
+  - {a: "US strikes Iranian island ahead of midterm", b: "Qeshm Island as Vance voices optimism", label: same}
+  - {a: "Americans vote in election that doubles as referendum", b: "live results from Senate, House and governor races", label: same}
+  - {a: "Two Australians confirmed dead in Spain", b: {source: bbc-world, title: "Spanish transport minister resigns"}, label: same}
+  - {a: {source: bbc-world, title: "Spanish transport minister resigns"}, b: {source: guardian-world, title: "Spanish transport minister resigns"}, label: same}
+  - {a: "Russian bombing kills 31 people at Ukraine aid centre", b: "Russian Airstrike Kills 31 at Ukraine Aid Center", label: same}
+  - {a: "Death toll hits 29 after Russian strike", b: "Death toll rises in Ukraine after Russia attacks aid centre", label: same}
+  - {a: "King Charles expresses ‘sorrow’", b: "King Charles addresses summit", label: same}
+  - {a: "Britain Set to Apologize for Role in Trans-Atlantic Slave Trade", b: "King Charles addresses summit", label: same}
+  - {a: "If hackers can take control of a supermarket freezer", b: "Food suppliers in UK hit by cyber-attacks", label: same}
+  - {a: "Food suppliers in UK hit by cyber-attacks", b: "Europe on alert after supermarket freezers", label: same}
+  - {a: "Seven flights across Europe targeted", b: "Seven planes across Europe searched", label: same}
+  - {a: "North Korea denies being behind record", b: "North Korea Denies Role in Binance", label: same}
+  - {a: "Binance says fake job interviews used", b: "Binance reveals hackers used fake job interviews", label: same}
+  - {a: "Binance says hackers used fake job interviews and an internal AI tool", b: "Binance reveals hackers used fake job interviews", label: same}
+  - {a: "Google will let schools skip AI tools", b: "Google will turn off search for schools", label: same}
+  - {a: "Google will let schools skip AI tools", b: "Google will let schools disable its AI tools", label: same}
+  - {a: "Google Will Cut Off Search Engine Access To Schools", b: "Google will turn off search for schools", label: same}
+  - {a: "Trump Says U.S. Plans to Cut Off Military Aid to Israel", b: "The President’s Proposal To Cut Israel Aid", label: same}
+  - {a: "Apple Watch’s AI features for rewinding", b: "Audio Intelligence on the Apple Watch", label: same}
+  - {a: "Netflix Introduces New AI-Powered Content Discovery", b: "Netflix’s new AI Discover tab", label: same}
+  - {a: "Jet may have broken apart before Florida crash", b: "NTSB says crucial plane parts found", label: same}
+  - {a: "Oil Futures Slump As Iran Peace Efforts", b: "Oil Futures Turn Lower as Market Holds Out Hope", label: same}
+
+  # Follow-ups, analysis and sidebars of a bigger story: editorial call, not scored
+  - {a: "Binance says fake job interviews used", b: "North Korea denies being behind record", label: related, note: hack vs attribution denial}
+  - {a: "Researchers warned of North Korean hacking tactics", b: "North Korea Denies Role in Binance", label: related}
+  - {a: "Gas Prices Hit Election Day Record", b: "remember which party ran against EVs", label: related}
+  - {a: "Zelenskyy hopes Abu Dhabi talks", b: "Zelenskyy says US elections will impact war", label: related}
+  - {a: "Tech Stocks Drive S&P 500 Higher", b: "Asian Tech Stocks to Rise on AI Rally", label: related}
+  - {a: "What Weil Gotshal teaches us", b: "Former Weil partners lawyer up", label: related}
+  - {a: "Four types of House races to watch", b: "live results from Senate, House and governor races", label: related}
+  - {a: "Michigan US Senate race: Rogers, El-Sayed", b: "El-Sayed Breaks the Democrats", label: related}
+
+  # Share a theme or a word, not a story
+  - {a: "US strikes Iranian island ahead of midterm", b: "live results from Senate, House and governor races", label: different, note: strike vs the vote}
+  - {a: "US strikes Iranian island ahead of midterm", b: "Americans vote in election that doubles as referendum", label: different}
+  - {a: "Why HR AI Needs Rules", b: "Research bonuses need clear and fair rules", label: different}
+  - {a: "Best Car Insurance Companies", b: "Best High-Yield Savings Accounts", label: different}
+  - {a: "Netflix’s Best New Show Lands A Perfect Rotten Tomatoes", b: "‘The Cat In The Hat’ Rotten Tomatoes", label: different}
+  - {a: "US social sciences face existential crisis", b: "Nature awards recognize inspiring women", label: different, note: Nature boilerplate}
+  - {a: "How democracy depends on science", b: "Will AI grant reviews make science more conservative", label: different}
+  - {a: "El-Sayed Breaks the Democrats", b: "Trump’s New Run at Ukraine Peace", label: different, note: WSJ "Opinion |" prefix}
+  - {a: "Show HN: HackerTV", b: "Show HN: Kairos", label: different, note: HN boilerplate}
+  - {a: "Opposition party organiser killed before South Africa", b: "Trump to remove Rwanda and South Africa", label: different}
+  - {a: "Claude’s new rules against game cloning", b: "Investors watch US state races for signs of backlash", label: different}
+  - {a: "Apple restricts dating apps and AI companions", b: "Apple starts giving Siri AI access", label: different}
+  - {a: "Your social media posts could fuel the next AI scam", b: "Australia's social media ban", label: different}
+  - {a: "Palestinian Americans turn to US flags", b: "Palestinian families return home after Israeli siege", label: different}
+  - {a: "Russia’s War On Ukraine: News And Information", b: "What we know about the alert app hack", label: different}
+  - {a: "Mac at Any Scale", b: "Stringman", label: different}
+  - {a: "Ukraine’s drone strikes spur hasty Russian plans", b: "Death toll rises in Ukraine after Russia attacks aid centre", label: different}
+  - {a: "Data centers are turning to old jet engines", b: "Ukraine’s drone strikes spur hasty Russian plans", label: different}

@@ -1,11 +1,12 @@
 """Group articles into topic buckets, either by rules + title similarity or via the LLM."""
 
 import logging
+from dataclasses import dataclass, field
 
 from ..config import GroupingConfig
 from ..llm import LLMClient, LLMError
 from ..models import Article, Topic
-from .text import Vector, add_into, cosine, jaccard, tokens
+from .text import Vector, add_into, cosine, dense_add, dense_cosine, jaccard, tokens
 
 log = logging.getLogger(__name__)
 
@@ -68,79 +69,115 @@ async def group_by_llm(articles: list[Article], llm: LLMClient) -> list[Topic]:
     return topics
 
 
-def _centroid(articles: list[Article]) -> Vector:
-    total: Vector = {}
-    for article in articles:
-        add_into(total, article.vector)
-    return total
+@dataclass
+class _Profile:
+    """A topic's articles plus their summed TF-IDF vectors and (if every article has one) embeddings."""
+
+    articles: list[Article]
+    terms: Vector = field(default_factory=dict)
+    dense: list[float] | None = None
+
+    @classmethod
+    def of(cls, articles: list[Article]) -> "_Profile":
+        profile = cls(articles=[])
+        for article in articles:
+            profile.add(cls(articles=[article], terms=dict(article.vector), dense=article.embedding))
+        return profile
+
+    def add(self, other: "_Profile") -> None:
+        had_articles = bool(self.articles)
+        self.articles += other.articles
+        add_into(self.terms, other.terms)
+        if other.dense is None or (had_articles and self.dense is None):
+            self.dense = None
+        elif self.dense is None:
+            self.dense = list(other.dense)
+        else:
+            dense_add(self.dense, other.dense)
 
 
 def _story_match(
-    new: list[Article], new_vec: Vector, existing: list[Article], existing_vec: Vector, threshold: float
+    new: _Profile, existing: _Profile, threshold: float, embedding_threshold: float | None
 ) -> str | None:
     """Why two topics are the same story, or None.
 
-    A shared link is conclusive. Otherwise both must hold:
-    - the topics' combined TF-IDF vectors (all titles + summaries) are similar and share
-      several terms, so one loosely related headline can't chain two stories together;
-    - some single pair of their articles is similar on its own, so a broad topic (e.g. a
-      live blog plus explainers) can't absorb an article that only shares its theme.
+    A shared link is conclusive. Otherwise all must hold:
+    - they share several distinctive TF-IDF terms, so short texts can't match on one or two words;
+    - their combined vectors are similar, so one loosely related headline can't chain stories;
+    - some single pair of their articles is similar on its own, so a broad topic (e.g. a live
+      blog plus explainers) can't absorb an article that only shares its theme.
+    Similarity is embedding cosine when both topics have embeddings, else TF-IDF cosine.
     """
-    by_url = {a.url_key: a for a in existing}
-    for article in new:
+    by_url = {a.url_key: a for a in existing.articles}
+    for article in new.articles:
         if (other := by_url.get(article.url_key)) is not None:
             return f"shared link {article.url_key} ({article.source_name}, {other.source_name})"
-    similarity = cosine(new_vec, existing_vec)
-    if similarity < threshold:
-        return None
-    shared = sorted(new_vec.keys() & existing_vec.keys(), key=lambda w: new_vec[w] * existing_vec[w], reverse=True)
+    shared = new.terms.keys() & existing.terms.keys()
     if len(shared) < MIN_SHARED_TERMS:
         return None
-    pair_score, a, b = max(
-        ((cosine(x.vector, y.vector), x, y) for x in new for y in existing), key=lambda p: p[0]
-    )
-    if pair_score < threshold:
+    if embedding_threshold is not None and new.dense is not None and existing.dense is not None:
+        kind, limit, similarity = "embedding", embedding_threshold, dense_cosine(new.dense, existing.dense)
+        pair_cosine = lambda x, y: dense_cosine(x.embedding, y.embedding)  # noqa: E731
+    else:
+        kind, limit, similarity = "tf-idf", threshold, cosine(new.terms, existing.terms)
+        pair_cosine = lambda x, y: cosine(x.vector, y.vector)  # noqa: E731
+    if similarity < limit:
         return None
+    pair_score, a, b = max(
+        ((pair_cosine(x, y), x, y) for x in new.articles for y in existing.articles), key=lambda p: p[0]
+    )
+    if pair_score < limit:
+        return None
+    top = sorted(shared, key=lambda w: new.terms[w] * existing.terms[w], reverse=True)[:5]
     return (
-        f"similar coverage (cosine {similarity:.2f}; shared terms: {', '.join(shared[:5])}); "
+        f"similar coverage ({kind} cosine {similarity:.2f}; shared terms: {', '.join(top)}); "
         f'closest pair {pair_score:.2f}: "{a.title}" ({a.source_name}) ~ "{b.title}" ({b.source_name})'
     )
 
 
-def merge_stories(topics: list[Topic], threshold: float) -> list[Topic]:
+def story_match(
+    new: list[Article], existing: list[Article], threshold: float, embedding_threshold: float | None = None
+) -> str | None:
+    """Public form of the merge decision for two groups of articles (used by tests/merge_eval.py)."""
+    return _story_match(_Profile.of(new), _Profile.of(existing), threshold, embedding_threshold)
+
+
+def merge_stories(
+    topics: list[Topic], threshold: float, embedding_threshold: float | None = None
+) -> list[Topic]:
     """Fold together topics that cover the same story so it yields a single report entry.
 
     Grouping can split a story across buckets (a keyword rule claims one outlet's
     headline while another outlet's lands in a similarity cluster, greedy clustering
-    order, or the LLM). Topics merge when they share an article URL or their TF-IDF
-    centroids reach `threshold`; the earliest topic keeps its name. Expects
-    preprocessed articles (annotated, weighted, one copy per URL).
+    order, or the LLM). See _story_match for when two topics count as one story; the
+    earliest topic keeps its name. Expects preprocessed articles (annotated, weighted,
+    one copy per URL; embedded if embeddings are configured).
     """
     merged: list[Topic] = []
-    centroids: list[Vector] = []
+    profiles: list[_Profile] = []
     for topic in topics:
-        vec = _centroid(topic.articles)
+        profile = _Profile.of(topic.articles)
         hits = [
             (i, reason)
-            for i, existing in enumerate(merged)
-            if (reason := _story_match(topic.articles, vec, existing.articles, centroids[i], threshold))
+            for i, existing in enumerate(profiles)
+            if (reason := _story_match(profile, existing, threshold, embedding_threshold))
         ]
         if not hits:
-            merged.append(Topic(name=topic.name, articles=list(topic.articles)))
-            centroids.append(vec)
+            merged.append(Topic(name=topic.name, articles=profile.articles))
+            profiles.append(profile)
             continue
         # The new topic may bridge several existing ones; collapse them all into the first.
         (first, reason), *rest = hits
         target = merged[first]
         for i, bridge_reason in reversed(rest):
             other = merged.pop(i)
-            add_into(centroids[first], centroids.pop(i))
+            profiles[first].add(profiles.pop(i))
             log.info('Merge: "%s" into "%s" via "%s": %s', other.name, target.name, topic.name, bridge_reason)
-            target.articles += other.articles
         log.info('Merge: "%s" into "%s": %s', topic.name, target.name, reason)
-        target.articles += topic.articles
-        add_into(centroids[first], vec)
-    log.info("Merge: %d topics -> %d stories", len(topics), len(merged))
+        profiles[first].add(profile)
+        target.articles = profiles[first].articles
+    embedded = embedding_threshold is not None and all(p.dense is not None for p in profiles)
+    log.info("Merge (%s): %d topics -> %d stories", "embeddings" if embedded else "tf-idf", len(topics), len(merged))
     return merged
 
 
@@ -160,4 +197,5 @@ async def group_articles(
         "Group (%s): %d articles -> %d topics (%d with more than one article)",
         method, sum(len(t.articles) for t in topics), len(topics), shared,
     )
-    return merge_stories(topics, config.merge_threshold)
+    embedding_threshold = config.embeddings.merge_threshold if config.embeddings else None
+    return merge_stories(topics, config.merge_threshold, embedding_threshold)

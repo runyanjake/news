@@ -35,6 +35,7 @@ class Article(BaseModel):
     url_key: str = Field(default="", exclude=True)
     words: frozenset[str] = Field(default_factory=frozenset, exclude=True)
     vector: dict[str, float] = Field(default_factory=dict, exclude=True)  # TF-IDF of title + summary
+    embedding: list[float] | None = Field(default=None, exclude=True)  # unit length; only for this run
 
 
 class Topic(BaseModel):

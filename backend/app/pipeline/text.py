@@ -4,6 +4,7 @@ These only derive comparison keys; they never change the text shown in a report.
 """
 
 import math
+import operator
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -94,3 +95,19 @@ def canonical_url(url: str) -> str:
         [(k, v) for k, v in parse_qsl(parts.query) if not _is_tracking(k)]
     )
     return f"{host}{parts.path.rstrip('/')}" + (f"?{query}" if query else "")
+
+
+def unit(vector: list[float]) -> list[float]:
+    norm = math.sqrt(sum(x * x for x in vector)) or 1.0
+    return [x / norm for x in vector]
+
+
+def dense_add(total: list[float], vector: list[float]) -> None:
+    for i, x in enumerate(vector):
+        total[i] += x
+
+
+def dense_cosine(a: list[float], b: list[float]) -> float:
+    dot = sum(map(operator.mul, a, b))
+    norms = math.sqrt(sum(map(operator.mul, a, a))) * math.sqrt(sum(map(operator.mul, b, b)))
+    return dot / norms if norms else 0.0

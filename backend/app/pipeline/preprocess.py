@@ -6,11 +6,13 @@ never decides which articles are the same *story*; that is merge_stories.
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 
-from ..config import PipelineConfig
+from ..config import EmbeddingConfig, PipelineConfig
+from ..llm import LLMClient, LLMError
 from ..models import Article
-from .text import canonical_url, tfidf_vectors, tokens
+from .text import canonical_url, tfidf_vectors, tokens, unit
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +57,46 @@ def weigh_terms(articles: list[Article]) -> None:
     ]
     for article, vector in zip(articles, tfidf_vectors(docs), strict=True):
         article.vector = vector
+
+
+def embedding_text(article: Article) -> str:
+    return f"{article.title}\n{article.summary[:SUMMARY_CHARS]}"
+
+
+async def embed_articles(articles: list[Article], llm: LLMClient | None, config: EmbeddingConfig | None) -> None:
+    """Attach one embedding per article (title + summary), held in memory for this run only.
+
+    Any failure leaves every article without an embedding, so merging falls back to TF-IDF.
+    """
+    if config is None or llm is None or not articles:
+        return
+    started = time.monotonic()
+    vectors, tokens_used, requests = [], 0, 0
+    try:
+        for start in range(0, len(articles), config.batch_size):
+            batch = articles[start : start + config.batch_size]
+            batch_started = time.monotonic()
+            embedded, used = await llm.embed([embedding_text(a) for a in batch], config.model)
+            requests += 1
+            tokens_used = None if used is None or tokens_used is None else tokens_used + used
+            vectors += [unit(v) for v in embedded]
+            log.debug("Embed: batch %d (%d documents) in %.2fs", requests, len(batch), time.monotonic() - batch_started)
+    except LLMError as exc:
+        log.warning(
+            "Embed: failed after %.1fs (%d of %d documents done), merging on TF-IDF only: %s",
+            time.monotonic() - started, len(vectors), len(articles), exc,
+        )
+        return
+    for article, vector in zip(articles, vectors, strict=True):
+        article.embedding = vector
+    elapsed = time.monotonic() - started
+    log.info(
+        "Embed: %d documents -> %d embeddings (1 per document, %d dimensions%s) with %s "
+        "in %.2fs (%.1f ms per document, %d request(s))",
+        len(articles), len(vectors), len(vectors[0]),
+        "" if tokens_used is None else f", {tokens_used} tokens",
+        config.model, elapsed, 1000 * elapsed / len(articles), requests,
+    )
 
 
 def _unique_in_feed(articles: list[Article]) -> list[Article]:

@@ -42,16 +42,24 @@ class FailingConnector(Connector):
 
 
 class FakeLLM:
-    def __init__(self, response=None, fail=False):
+    def __init__(self, response=None, fail=False, embed=None):
         self.response = response or {"tagline": "AI tagline", "summary": "AI summary."}
         self.fail = fail
+        self.embed_fn = embed  # text -> vector; None means the server has no embeddings
         self.calls = []
+        self.embed_calls = []
 
     async def complete_json(self, system, user):
         self.calls.append(user)
         if self.fail:
             raise LLMError("offline")
         return self.response
+
+    async def embed(self, texts, model):
+        self.embed_calls.append(list(texts))
+        if self.fail or self.embed_fn is None:
+            raise LLMError("no embeddings")
+        return [self.embed_fn(t) for t in texts], 7 * len(texts)
 
 
 @pytest.fixture

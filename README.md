@@ -50,6 +50,19 @@ set -a; . ./.env; set +a
 (cd frontend && npm run generate)  # writes data/site/
 ```
 
+### Tuning the merge step
+
+`backend/tests/data/merge/` holds labeled same-story pairs from real feeds (`<day>.labels.yaml`, written by hand) and the fixture built from them (`<day>.json`). `backend/tests/test_merge_eval.py` fails if the configured thresholds merge fewer same-story pairs or more different-story pairs than the recorded baseline. To compare thresholds or an embedding model:
+
+```sh
+cd backend
+../.venv/bin/python -m tests.merge_eval eval tests/data/merge/2026-11-03.json
+LLM_BASE_URL=http://localhost:11434/v1 ../.venv/bin/python -m tests.merge_eval eval tests/data/merge/2026-11-03.json --embeddings nomic-embed-text
+../.venv/bin/python -m tests.merge_eval snapshot <dir of saved <source id>.xml feeds> tests/data/merge/<day>.labels.yaml
+```
+
+`--embeddings` fetches the labeled articles' embeddings once and caches them in `tests/data/merge/embeddings/`, so the test suite can check a configured model offline. Tests only read `tests/data/`; nothing touches `data/`.
+
 ### API
 
 | Method | Path | |
@@ -59,9 +72,9 @@ set -a; . ./.env; set +a
 | GET | `/api/reports/{date}/generations` | generation stamps for a date (`YYYYMMDDTHHMMSSZ`, UTC), newest first |
 | GET | `/api/reports/{date}/generations/{stamp}` | one generation's report JSON |
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
-| GET | `/api/jobs/generate` | generation status |
+| GET | `/api/jobs/generate` | generation status; blocked at nginx |
 
-Generation is blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):
+Generation and its status are blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):
 
 ```sh
 set -a; . ./.env; set +a   # loads ADMIN_TOKEN

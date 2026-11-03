@@ -22,10 +22,17 @@ class PipelineConfig(BaseModel):
     max_items_per_source: int = 30
 
 
+class EmbeddingConfig(BaseModel):
+    model: str  # served by the same OpenAI-compatible server as the LLM
+    merge_threshold: float = 0.8  # embedding cosine; calibrate with tests/merge_eval.py
+    batch_size: int = 64
+
+
 class GroupingConfig(BaseModel):
     method: str = "keywords"
     similarity_threshold: float = 0.25
     merge_threshold: float = 0.2
+    embeddings: EmbeddingConfig | None = None  # None: merge on TF-IDF alone
     topics: list[TopicRule] = Field(default_factory=list)
 
 

@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<rss version="2.0"><channel><title>T</title>
+<item><title>Storm &amp; floods hit coast</title><link>https://x.example/1</link>
+  <description>&lt;p&gt;Heavy <b>rain</b> fell.&lt;/p&gt;</description>
+  <pubDate>Wed, 22 Oct 2026 12:00:00 GMT</pubDate></item>
+<item><title></title><link>https://x.example/2</link></item>
+<item><title>No date</title><link>https://x.example/3</link></item>
+</channel></rss>

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from app.config import load_config
@@ -8,15 +10,9 @@ from app.settings import load_settings
 
 # The deployed config: config/sources.yaml in a checkout, or SOURCES_FILE inside the image.
 REPO_CONFIG = load_settings().sources_file
+DATA = Path(__file__).parent / "data"
 
-RSS = b"""<?xml version="1.0"?>
-<rss version="2.0"><channel><title>T</title>
-<item><title>Storm &amp; floods hit coast</title><link>https://x.example/1</link>
-  <description>&lt;p&gt;Heavy <b>rain</b> fell.&lt;/p&gt;</description>
-  <pubDate>Wed, 22 Oct 2026 12:00:00 GMT</pubDate></item>
-<item><title></title><link>https://x.example/2</link></item>
-<item><title>No date</title><link>https://x.example/3</link></item>
-</channel></rss>"""
+RSS = (DATA / "feeds" / "sample.xml").read_bytes()
 
 
 def test_repo_config_is_valid():

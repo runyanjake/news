@@ -151,6 +151,11 @@ grouping:
   method: keywords           # "keywords" (rules + title similarity) or "llm" (falls back to keywords)
   similarity_threshold: 0.25  # headline word overlap for clustering
   merge_threshold: 0.2       # TF-IDF cosine (title + summary) at which two topics are one story
+  # Optional: embed title + summary with the LLM server and merge on embedding similarity
+  # (TF-IDF still supplies the shared-terms check, and is the fallback if embedding fails).
+  # embeddings:
+  #   model: nomic-embed-text
+  #   merge_threshold: 0.8     # calibrate: cd backend && python -m tests.merge_eval --embeddings
   # Keep rules story-sized, e.g. {name: Ukraine War, keywords: [ukraine, kyiv]}; broad ones merge unrelated stories.
   topics: []
 
