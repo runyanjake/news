@@ -42,6 +42,8 @@ def group_by_keywords(articles: list[Article], config: GroupingConfig) -> list[T
 
 async def group_by_llm(articles: list[Article], llm: LLMClient) -> list[Topic]:
     items = articles[:MAX_LLM_ITEMS]
+    if len(items) < len(articles):
+        log.warning("Group: LLM grouping sees only the newest %d of %d articles", len(items), len(articles))
     listing = "\n".join(f"{i}: [{a.source_name}] {a.title}" for i, a in enumerate(items))
     result = await llm.complete_json(
         system=(
@@ -64,17 +66,20 @@ async def group_by_llm(articles: list[Article], llm: LLMClient) -> list[Topic]:
     return topics
 
 
-StoryKey = tuple[list[frozenset[str]], set[str]]  # (title words, url keys) of a topic
-
-
-def _story_key(articles: list[Article]) -> StoryKey:
-    return [a.words for a in articles], {a.url_key for a in articles}
-
-
-def _same_story(a: StoryKey, b: StoryKey, threshold: float) -> bool:
-    if a[1] & b[1]:
-        return True
-    return any(jaccard(x, y) >= threshold for x in a[0] for y in b[0])
+def _story_match(new: list[Article], existing: list[Article], threshold: float) -> str | None:
+    """Why two topics are the same story (a shared link or a similar headline pair), or None."""
+    by_url = {a.url_key: a for a in existing}
+    for article in new:
+        if (other := by_url.get(article.url_key)) is not None:
+            return f"shared link {article.url_key} ({article.source_name}, {other.source_name})"
+    for article in new:
+        for other in existing:
+            if jaccard(article.words, other.words) >= threshold:
+                return (
+                    f'similar headlines "{article.title}" ({article.source_name})'
+                    f' ~ "{other.title}" ({other.source_name})'
+                )
+    return None
 
 
 def merge_stories(topics: list[Topic], threshold: float) -> list[Topic]:
@@ -87,37 +92,42 @@ def merge_stories(topics: list[Topic], threshold: float) -> list[Topic]:
     Expects preprocessed articles (annotated, one copy per URL).
     """
     merged: list[Topic] = []
-    keys: list[StoryKey] = []
     for topic in topics:
-        key = _story_key(topic.articles)
-        hits = [i for i, other in enumerate(keys) if _same_story(key, other, threshold)]
+        hits = [
+            (i, reason)
+            for i, existing in enumerate(merged)
+            if (reason := _story_match(topic.articles, existing.articles, threshold))
+        ]
         if not hits:
             merged.append(Topic(name=topic.name, articles=list(topic.articles)))
-            keys.append(key)
             continue
         # The new topic may bridge several existing ones; collapse them all into the first.
-        first, *rest = hits
-        target, target_key = merged[first], keys[first]
-        for i in reversed(rest):
-            target.articles += merged.pop(i).articles
-            other = keys.pop(i)
-            target_key[0].extend(other[0])
-            target_key[1].update(other[1])
+        (first, reason), *rest = hits
+        target = merged[first]
+        for i, bridge_reason in reversed(rest):
+            other = merged.pop(i)
+            log.info('Merge: "%s" into "%s" via "%s": %s', other.name, target.name, topic.name, bridge_reason)
+            target.articles += other.articles
+        log.info('Merge: "%s" into "%s": %s', topic.name, target.name, reason)
         target.articles += topic.articles
-        target_key[0].extend(key[0])
-        target_key[1].update(key[1])
+    log.info("Merge: %d topics -> %d stories", len(topics), len(merged))
     return merged
 
 
 async def group_articles(
     articles: list[Article], config: GroupingConfig, llm: LLMClient | None
 ) -> list[Topic]:
-    topics = None
+    topics, method = None, "keywords"
     if config.method == "llm" and llm is not None:
         try:
-            topics = await group_by_llm(articles, llm)
+            topics, method = await group_by_llm(articles, llm), "llm"
         except LLMError as exc:
-            log.warning("LLM grouping failed, falling back to keywords: %s", exc)
+            log.warning("Group: LLM grouping failed, falling back to keywords: %s", exc)
     if topics is None:
         topics = group_by_keywords(articles, config)
+    shared = sum(1 for t in topics if len(t.articles) > 1)
+    log.info(
+        "Group (%s): %d articles -> %d topics (%d with more than one article)",
+        method, sum(len(t.articles) for t in topics), len(topics), shared,
+    )
     return merge_stories(topics, config.similarity_threshold)

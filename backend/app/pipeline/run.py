@@ -34,30 +34,46 @@ async def collect(connectors: list[Connector]) -> list[list[Article]]:
     async with httpx.AsyncClient(timeout=FETCH_TIMEOUT_SECONDS, headers={"User-Agent": USER_AGENT}) as client:
         results = await asyncio.gather(*(c.fetch(client) for c in connectors), return_exceptions=True)
 
-    per_source = []
+    per_source, failed = [], []
     for connector, result in zip(connectors, results, strict=True):
         if isinstance(result, Exception):
-            log.warning("Source %s failed: %s", connector.source.id, result)
+            log.warning("Collect: source %s failed: %s", connector.source.id, result)
+            failed.append(connector.source.id)
             continue
         per_source.append(result)
+    log.info(
+        "Collect: %d items from %d of %d sources%s",
+        sum(map(len, per_source)), len(per_source), len(connectors),
+        f" (failed: {', '.join(failed)})" if failed else "",
+    )
     return per_source
 
 
 def select_topics(ranked: list[Topic], config: ReportConfig) -> list[Story]:
     """Best topics with their top sources, capping each section (the top source's first tag)."""
     cap = config.max_entries_per_tag
-    selected, per_tag = [], Counter()
+    selected, per_tag, thin, capped = [], Counter(), 0, Counter()
     for topic in ranked:
         top = best_per_source(topic)[: config.sources_per_entry]
         if len(top) < config.min_sources_per_entry:
+            thin += 1
             continue
         section = top[0].tags[0] if top[0].tags else None
         if section and cap is not None and per_tag[section] >= cap:
+            capped[section] += 1
             continue
         per_tag[section] += 1
         selected.append((topic, top))
         if len(selected) == config.max_entries:
             break
+    skipped = [f"{thin} with fewer than {config.min_sources_per_entry} sources"] if thin else []
+    if capped:
+        by_tag = ", ".join(f"{tag} {n}" for tag, n in capped.most_common())
+        skipped.append(f"{capped.total()} over the per-section cap of {cap} ({by_tag})")
+    log.info(
+        "Select: %d of %d stories%s",
+        len(selected), len(ranked), f" (skipped {'; '.join(skipped)})" if skipped else "",
+    )
     return selected
 
 
@@ -65,8 +81,6 @@ async def build_context(
     config: AppConfig, llm: LLMClient | None, connectors: list[Connector], now: datetime
 ) -> list[Story]:
     articles = preprocess(await collect(connectors), config.pipeline, now)
-    log.info("Collected %d articles from %d sources", len(articles), len(connectors))
-
     topics = await group_articles(articles, config.grouping, llm)
     ranked = score_topics(topics, config.scoring, now, config.report.sources_per_entry)
     return select_topics(ranked, config.report)
@@ -79,7 +93,11 @@ async def write_entries(stories: list[Story], llm: LLMClient | None) -> list[Rep
         async with semaphore:
             return await summarize_topic(topic, top, llm)
 
-    return list(await asyncio.gather(*(summarize(t, top) for t, top in stories)))
+    entries = list(await asyncio.gather(*(summarize(t, top) for t, top in stories)))
+    fallback = sum(1 for e in entries if not e.ai_generated)
+    log.info("Write: %d entries (%d AI-written, %d fell back to the top source)",
+             len(entries), len(entries) - fallback, fallback)
+    return entries
 
 
 async def generate_report(
@@ -95,4 +113,17 @@ async def generate_report(
 
     stories = await build_context(config, llm, connectors, now)
     entries = await write_entries(stories, llm)
-    return Report(date=local_date, generated_at=now, entries=entries)
+    report = Report(
+        date=local_date, generated_at=now, entries=entries, site_name=config.report.site_name
+    )
+    log.info("%s", describe_report(report))
+    return report
+
+
+def describe_report(report: Report) -> str:
+    """Multi-line summary for the logs: the report title, then one bullet per story."""
+    lines = [f'Generated report "{report.title}" ({len(report.entries)} stories)']
+    for entry in report.entries:
+        sources = len(entry.sources)
+        lines.append(f"  - {entry.tagline} ({sources} source{'s' if sources != 1 else ''})")
+    return "\n".join(lines)

@@ -161,6 +161,7 @@ scoring:
   recency_half_life_hours: 12
 
 report:
+  site_name: PWS NEWS        # shown on every page; report titles are "<site_name> — <date>"
   max_entries: 15            # topics that make it into the report
   sources_per_entry: 5       # top N sources fed to the LLM and listed per entry
   min_sources_per_entry: 1

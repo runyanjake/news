@@ -4,6 +4,7 @@ import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createBackend } from './backend.js';
 import { generateAndPublish, publishLatestIfNew, rebuildAll } from './jobs.js';
+import { createLogger } from './log.js';
 import { msUntilNext } from './schedule.js';
 
 const env = process.env;
@@ -17,21 +18,26 @@ const backend = createBackend({
   adminToken: env.ADMIN_TOKEN ?? '',
 });
 
-const log = (...args) => console.log(new Date().toISOString(), ...args);
+const log = createLogger('renderer');
 let renderedAt = null; // generated_at of the newest report this process has rendered
 
+const elapsed = (started) => `${((Date.now() - started) / 1000).toFixed(1)}s`;
+
 async function runWithRetries() {
+  const started = Date.now();
+  log.info('Daily render job started');
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const report = await generateAndPublish(backend, siteDir);
       renderedAt = report.generated_at;
-      log(`Published ${report.date} (${report.entries.length} entries)`);
+      log.info(`Daily render job finished in ${elapsed(started)}: published ${report.date} (${report.entries.length} entries)`);
       return;
     } catch (err) {
-      log(`Attempt ${attempt}/${maxAttempts} failed: ${err.message}`);
+      log.warn(`Attempt ${attempt}/${maxAttempts} failed: ${err.message}`);
       if (attempt < maxAttempts) await sleep(retryMinutes * 60_000);
     }
   }
+  log.error(`Daily render job failed after ${maxAttempts} attempts (${elapsed(started)})`);
 }
 
 /** A fresh site volume has no front page until the first daily run; render one at startup instead. */
@@ -42,14 +48,14 @@ async function ensureFrontPage() {
     try {
       dates = await backend.listDates();
     } catch (err) {
-      if (attempt >= 30) return log(`No front page and backend unreachable: ${err.message}`);
+      if (attempt >= 30) return log.error(`No front page and backend unreachable: ${err.message}`);
       await sleep(2_000);
     }
   }
   if (dates.length) {
-    log(`No front page; re-rendered ${await rebuildAll(backend, siteDir)} stored reports`);
+    log.info(`No front page; re-rendered ${await rebuildAll(backend, siteDir)} stored reports`);
   } else {
-    log('No front page and no stored reports; generating one now');
+    log.info('No front page and no stored reports; generating one now');
     await runWithRetries();
   }
 }
@@ -60,9 +66,9 @@ async function watchLoop() {
     try {
       const previous = renderedAt;
       renderedAt = await publishLatestIfNew(backend, siteDir, renderedAt);
-      if (renderedAt !== previous) log(`Rendered latest report (generated ${renderedAt})`);
+      if (renderedAt !== previous) log.info(`Rendered latest report (generated ${renderedAt})`);
     } catch (err) {
-      if (!err.message.includes('-> 404')) log(`Watching for new reports failed: ${err.message}`);
+      if (!err.message.includes('-> 404')) log.warn(`Watching for new reports failed: ${err.message}`);
     }
     await sleep(watchSeconds * 1_000);
   }
@@ -70,10 +76,10 @@ async function watchLoop() {
 
 async function schedulerLoop() {
   await ensureFrontPage();
-  log(`Scheduler started; rendering daily at ${renderTime} (TZ=${env.TZ ?? 'system'})`);
+  log.info(`Scheduler started; rendering daily at ${renderTime} (TZ=${env.TZ ?? 'system'})`);
   for (;;) {
     const wait = msUntilNext(new Date(), renderTime);
-    log(`Next render in ${Math.round(wait / 60_000)} min`);
+    log.info(`Next render in ${Math.round(wait / 60_000)} min`);
     await sleep(wait);
     await runWithRetries();
   }
@@ -84,11 +90,16 @@ if (command === 'schedule') {
   watchLoop();
   await schedulerLoop();
 } else if (command === 'generate') {
+  const started = Date.now();
+  log.info('Generate job started');
   const report = await generateAndPublish(backend, siteDir);
-  log(`Published ${report.date} (${report.entries.length} entries) to ${siteDir}`);
+  log.info(`Generate job finished in ${elapsed(started)}: published ${report.date} (${report.entries.length} entries) to ${siteDir}`);
 } else if (command === 'rebuild') {
-  log(`Re-rendered ${await rebuildAll(backend, siteDir)} reports to ${siteDir}`);
+  const started = Date.now();
+  log.info('Rebuild job started');
+  const count = await rebuildAll(backend, siteDir);
+  log.info(`Rebuild job finished in ${elapsed(started)}: re-rendered ${count} reports to ${siteDir}`);
 } else {
-  console.error(`Unknown command "${command}" (expected schedule | generate | rebuild)`);
+  log.error(`Unknown command "${command}" (expected schedule | generate | rebuild)`);
   process.exit(2);
 }

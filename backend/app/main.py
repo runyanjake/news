@@ -3,21 +3,25 @@
 import asyncio
 import logging
 import secrets
+import time
 from datetime import datetime
 
 from fastapi import FastAPI, Header, HTTPException
 
 from .config import load_config
 from .llm import LLMClient
+from .logs import configure_logging
 from .models import Report
 from .pipeline import generate_report
 from .settings import Settings, load_settings
 from .storage import ReportStore
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+configure_logging()
+log = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -> FastAPI:
+    configure_logging()  # again: uvicorn configures its loggers after importing this module
     settings = settings or load_settings()
     store = ReportStore(settings.reports_dir)
     llm = llm or LLMClient(
@@ -71,14 +75,21 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     tasks: set[asyncio.Task] = set()
 
     async def run_generation() -> None:
+        started = time.monotonic()
+        log.info("Generation job started")
         try:
             # Re-read config each run so source edits apply without a restart.
             config = load_config(settings.sources_file)
             local_date = datetime.now().astimezone().date().isoformat()
-            store.save(await generate_report(config, llm, local_date))
+            report = await generate_report(config, llm, local_date)
+            store.save(report)
             job.update(last_date=local_date, last_error=None)
+            log.info(
+                "Generation job finished in %.1fs: %s, %d stories",
+                time.monotonic() - started, local_date, len(report.entries),
+            )
         except Exception as exc:  # surfaced to the caller via the job status
-            logging.exception("Report generation failed")
+            log.exception("Generation job failed after %.1fs", time.monotonic() - started)
             job["last_error"] = str(exc)
         finally:
             job["running"] = False

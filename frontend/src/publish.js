@@ -53,6 +53,6 @@ export async function publishReport(siteDir, report) {
     await writeAtomic(path.join(siteDir, 'reports', report.date, 'index.html'), html);
     if (days[0] === day) await writeAtomic(path.join(siteDir, 'index.html'), html);
   }
-  await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(days));
-  await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy());
+  await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(days, report.site_name));
+  await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy(report.site_name));
 }

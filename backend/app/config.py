@@ -7,7 +7,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from .models import SourceConfig
+from .models import DEFAULT_SITE_NAME, SourceConfig
 
 _ENV_REF = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
@@ -40,6 +40,7 @@ class ReportConfig(BaseModel):
     sources_per_entry: int = 5
     min_sources_per_entry: int = 1
     max_entries_per_tag: int | None = None
+    site_name: str = DEFAULT_SITE_NAME  # report title is "<site_name> — <date>"
 
 
 class AppConfig(BaseModel):

@@ -2,7 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+DEFAULT_SITE_NAME = "PWS NEWS"
 
 
 class SourceConfig(BaseModel):
@@ -61,3 +63,12 @@ class Report(BaseModel):
     date: str  # local date, YYYY-MM-DD
     generated_at: datetime
     entries: list[ReportEntry]
+    # Defaults keep reports stored before these fields existed loadable (and titled).
+    site_name: str = DEFAULT_SITE_NAME
+    title: str = ""
+
+    @model_validator(mode="after")
+    def _default_title(self) -> "Report":
+        if not self.title:
+            self.title = f"{self.site_name} — {self.date}"
+        return self
