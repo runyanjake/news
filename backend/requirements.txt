@@ -4,3 +4,4 @@ httpx==0.28.1
 feedparser==6.0.14
 PyYAML==6.0.3
 pydantic==2.14.1
+prometheus-client==0.26.0
