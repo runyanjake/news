@@ -33,6 +33,12 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     def health() -> dict:
         return {"status": "ok"}
 
+    @app.get("/api/sources")
+    def list_sources() -> list[dict]:
+        """Enabled sources, for the site's source list; feed URLs and options stay private."""
+        config = load_config(settings.sources_file)
+        return [{"name": s.name, "tags": s.tags} for s in config.sources if s.enabled]
+
     @app.get("/api/reports")
     def list_reports() -> list[str]:
         return store.dates()

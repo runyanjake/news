@@ -1,7 +1,9 @@
-// Site layout: index.html (newest), reports/<date>/ (newest per date), archive/<date>/<stamp>/ (all), archive/, privacy/.
-import { mkdir, readdir, rename, writeFile } from 'node:fs/promises';
+// Site layout: index.html (newest), reports/<date>/ (newest per date), archive/<date>/<stamp>/ (all), archive/, privacy/,
+// assets/ (fonts).
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { renderArchive, renderPrivacy, renderReport } from './report-format/index.js';
+import { fileURLToPath } from 'node:url';
+import { ASSETS_DIR, renderArchive, renderPrivacy, renderReport } from './report-format/index.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STAMP = /^\d{8}T\d{6}Z$/;
@@ -54,5 +56,13 @@ export async function publishReport(siteDir, report) {
     if (days[0] === day) await writeAtomic(path.join(siteDir, 'index.html'), html);
   }
   await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(days, report.site_name));
-  await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy(report.site_name));
+}
+
+/** Pages and files shared by every report: the privacy page (with the current source list) and assets/. */
+export async function publishSite(siteDir, siteName, sources) {
+  await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy(siteName, sources));
+  const assets = fileURLToPath(ASSETS_DIR);
+  for (const name of await readdir(assets)) {
+    await writeAtomic(path.join(siteDir, 'assets', name), await readFile(path.join(assets, name)));
+  }
 }

@@ -1,22 +1,39 @@
-body { font-family: Georgia, 'Times New Roman', serif; margin: 0 auto; max-width: 1100px; padding: 1rem; color: #111; background: #fff; }
-header { text-align: center; border-bottom: 3px double #111; margin-bottom: 1rem; }
+/* Self-hosted SIL OFL fonts (assets/OFL-*.txt); only generic families as fallbacks. */
+@font-face { font-family: 'Source Serif 4'; src: url('/assets/source-serif-4.woff2') format('woff2'); font-weight: 200 900; font-display: swap; }
+@font-face { font-family: 'Source Sans 3'; src: url('/assets/source-sans-3.woff2') format('woff2'); font-weight: 200 900; font-display: swap; }
+:root {
+  --serif: 'Source Serif 4', serif; --sans: 'Source Sans 3', sans-serif; --font: var(--serif);
+  --fg: #111; --bg: #fff; --muted: #555; --rule: #ccc; --visited: #551a8b; --accent: #b00;
+  color-scheme: light;
+}
+:root[data-font="sans"] { --font: var(--sans); }
+:root[data-theme="dark"] { --fg: #e4e4e4; --bg: #141414; --muted: #a3a3a3; --rule: #444; --visited: #b9a3e3; --accent: #ff6b6b; color-scheme: dark; }
+body { font-family: var(--font); margin: 0 auto; max-width: 1100px; padding: 1rem; color: var(--fg); background: var(--bg); }
+header { text-align: center; border-bottom: 3px double var(--fg); margin-bottom: 1rem; }
 header h1 { font-size: 3rem; letter-spacing: .1em; margin: .2em 0; }
 header h1 a { text-decoration: none; }
-.date { text-align: center; font-family: monospace; color: #555; }
-a { color: #000; }
-a:visited { color: #551a8b; }
+.date { text-align: center; font-family: monospace; color: var(--muted); }
+a { color: var(--fg); }
+a:visited { color: var(--visited); }
 .lead { text-align: center; margin: 1.5rem 0 2rem; }
-.lead .tagline { font-size: 2.2rem; font-weight: bold; text-transform: uppercase; color: #b00; text-decoration: none; }
+.lead .tagline { font-size: 2.2rem; font-weight: bold; text-transform: uppercase; color: var(--accent); text-decoration: none; }
 .lead p { font-size: 1.1rem; max-width: 760px; margin: .8rem auto; }
 .columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
 @media (max-width: 800px) { .columns { grid-template-columns: 1fr; } }
-.entry { border-bottom: 1px solid #ccc; padding-bottom: .8rem; margin-bottom: .8rem; }
+.entry { border-bottom: 1px solid var(--rule); padding-bottom: .8rem; margin-bottom: .8rem; }
 .entry .tagline { font-weight: bold; font-size: 1.1rem; text-transform: uppercase; }
 .entry p { margin: .4rem 0; }
-.sources { font-size: .8rem; color: #555; padding-left: 1rem; margin: .3rem 0; }
-.sources a { color: #555; }
+.sources { font-size: .8rem; color: var(--muted); padding-left: 1rem; margin: .3rem 0; }
+.sources a { color: var(--muted); }
 .lead .sources { display: inline-block; text-align: left; max-width: 760px; margin: .3rem auto; }
-footer { border-top: 1px solid #111; margin-top: 2rem; padding-top: .5rem; font-size: .85rem; text-align: center; }
+footer { border-top: 1px solid var(--fg); margin-top: 2rem; padding-top: .5rem; font-size: .85rem; text-align: center; }
 .archive li { font-family: monospace; margin: .3rem 0; }
 .policy { max-width: 760px; margin: 0 auto; }
 .policy h3 { margin-bottom: .3rem; }
+.policy .updated { font-family: monospace; color: var(--muted); }
+.source-list { columns: 2; padding-left: 1rem; }
+/* Display options: small and faint in the corner so the page still reads as one document. */
+.prefs { position: fixed; right: .5rem; bottom: .5rem; display: flex; gap: .25rem; opacity: .4; }
+.prefs:hover, .prefs:focus-within { opacity: 1; }
+.prefs button { font: .75rem/1 var(--sans); color: var(--muted); background: var(--bg); border: 1px solid var(--rule); border-radius: 3px; padding: .25rem .35rem; cursor: pointer; }
+@media print { .prefs { display: none; } }
