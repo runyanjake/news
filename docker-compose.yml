@@ -3,6 +3,8 @@ networks:
     name: news
     driver: bridge
     internal: true
+  metrics:
+    external: true
   ai:
     external: true
   traefik:
@@ -23,6 +25,7 @@ services:
     networks:
       - news
       - ai
+      - metrics
     labels:
       - traefik.enable=false
     restart: unless-stopped
