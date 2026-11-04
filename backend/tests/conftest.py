@@ -6,6 +6,7 @@ from app.connectors import Connector
 from app.llm import LLMError
 from app.models import Article, SourceConfig
 from app.pipeline.preprocess import annotate
+from app.settings import Settings
 
 NOW = datetime(2026, 10, 22, 15, 0, tzinfo=UTC)
 
@@ -65,3 +66,18 @@ class FakeLLM:
 @pytest.fixture
 def fake_llm():
     return FakeLLM()
+
+
+@pytest.fixture
+def settings(tmp_path):
+    sources = tmp_path / "sources.yaml"
+    sources.write_text("sources: []\n")
+    return Settings(
+        sources_file=sources,
+        reports_dir=tmp_path / "reports",
+        llm_base_url="http://unused",
+        llm_model="m",
+        llm_api_key="",
+        llm_timeout=1,
+        admin_token="tok",
+    )

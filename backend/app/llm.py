@@ -5,6 +5,8 @@ import re
 
 import httpx
 
+from . import metrics
+
 _JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
 
 
@@ -25,14 +27,15 @@ class LLMClient:
     async def embed(self, texts: list[str], model: str) -> tuple[list[list[float]], int | None]:
         """One embedding per text, in order, plus the prompt tokens the server reports (if any)."""
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/embeddings",
-                    json={"model": model, "input": texts},
-                    headers=self._headers(),
-                )
-                response.raise_for_status()
-                body = response.json()
+            with metrics.llm_request("embed"):
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        f"{self.base_url}/embeddings",
+                        json={"model": model, "input": texts},
+                        headers=self._headers(),
+                    )
+                    response.raise_for_status()
+                    body = response.json()
             rows = sorted(body["data"], key=lambda row: row["index"])
             vectors = [row["embedding"] for row in rows]
         except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
@@ -52,12 +55,13 @@ class LLMClient:
             ],
         }
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(
-                    f"{self.base_url}/chat/completions", json=payload, headers=headers
-                )
-                response.raise_for_status()
-                return response.json()["choices"][0]["message"]["content"]
+            with metrics.llm_request("chat"):
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.post(
+                        f"{self.base_url}/chat/completions", json=payload, headers=headers
+                    )
+                    response.raise_for_status()
+                    return response.json()["choices"][0]["message"]["content"]
         except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
             raise LLMError(str(exc)) from exc
 

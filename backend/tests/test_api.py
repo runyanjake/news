@@ -1,29 +1,12 @@
 import time
 from datetime import UTC, datetime
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app import main
 from app.main import create_app
 from app.models import Report
-from app.settings import Settings
 from app.storage import ReportStore
-
-
-@pytest.fixture
-def settings(tmp_path):
-    sources = tmp_path / "sources.yaml"
-    sources.write_text("sources: []\n")
-    return Settings(
-        sources_file=sources,
-        reports_dir=tmp_path / "reports",
-        llm_base_url="http://unused",
-        llm_model="m",
-        llm_api_key="",
-        llm_timeout=1,
-        admin_token="tok",
-    )
 
 
 def _report(date):

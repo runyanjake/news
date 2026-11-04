@@ -73,6 +73,7 @@ LLM_BASE_URL=http://localhost:11434/v1 ../.venv/bin/python -m tests.merge_eval e
 | GET | `/api/reports/{date}/generations/{stamp}` | one generation's report JSON |
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status; blocked at nginx |
+| GET | `/metrics` | Prometheus metrics; not proxied by nginx (see Metrics) |
 
 Generation and its status are blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):
 
@@ -83,6 +84,32 @@ docker run --rm --network news curlimages/curl -sS http://pws-news-backend:8000/
 ```
 
 Against a backend started with `uvicorn` (see Development), use `http://localhost:8000` with plain `curl`. Each generation becomes that date's current report; earlier ones stay in its history. The renderer checks `/api/reports/latest` every `RENDER_WATCH_SECONDS` (default 60) and re-renders when `generated_at` changes, so the site picks up the new report within a minute. `docker exec pws-news-renderer node src/main.js generate` generates and renders in one step instead.
+
+## Metrics
+
+The backend serves Prometheus metrics at `GET /metrics` on port 8000 (`backend/app/metrics.py`, via `prometheus-client`). nginx only proxies `/api/`, so the endpoint isn't public. Prometheus scrapes it from a docker network it shares with `pws-news-backend`:
+
+```yaml
+scrape_configs:
+  - job_name: pws-news
+    static_configs:
+      - targets: ["pws-news-backend:8000"]
+```
+
+Grafana then reads the series from that Prometheus data source. Besides the default `process_*` and `python_*` series:
+
+| Metric | Type | Labels |
+| --- | --- | --- |
+| `news_generation_runs_total` | counter | `outcome` (`success`/`failure`) |
+| `news_generation_duration_seconds` | histogram | |
+| `news_generation_last_success_timestamp_seconds` | gauge | |
+| `news_report_entries` | gauge, last report | `writer` (`llm`/`fallback`) |
+| `news_source_fetches_total` | counter | `source`, `outcome` |
+| `news_source_items` | gauge, last generation | `source` |
+| `news_llm_requests_total` | counter | `operation` (`chat`/`embed`), `outcome` |
+| `news_llm_request_duration_seconds` | histogram | `operation` |
+
+Useful queries: `time() - news_generation_last_success_timestamp_seconds` (alert when it passes ~25h), `increase(news_source_fetches_total{outcome="failure"}[1d])`, `histogram_quantile(0.95, rate(news_llm_request_duration_seconds_bucket[1h]))`.
 
 ## CI/CD (Jenkins)
 

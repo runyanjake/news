@@ -6,8 +6,9 @@ import secrets
 import time
 from datetime import datetime
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 
+from . import metrics
 from .config import load_config
 from .llm import LLMClient
 from .logs import configure_logging
@@ -32,6 +33,12 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/metrics", include_in_schema=False)
+    def prometheus_metrics() -> Response:
+        """Prometheus scrape target; nginx doesn't proxy it, so only the internal network can reach it."""
+        body, content_type = metrics.exposition()
+        return Response(body, media_type=content_type)
 
     @app.get("/api/sources")
     def list_sources() -> list[dict]:
@@ -90,6 +97,8 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
             report = await generate_report(config, llm, local_date)
             store.save(report)
             job.update(last_date=local_date, last_error=None)
+            metrics.GENERATION_RUNS.labels("success").inc()
+            metrics.LAST_SUCCESS.set_to_current_time()
             log.info(
                 "Generation job finished in %.1fs: %s, %d stories",
                 time.monotonic() - started, local_date, len(report.entries),
@@ -97,7 +106,9 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         except Exception as exc:  # surfaced to the caller via the job status
             log.exception("Generation job failed after %.1fs", time.monotonic() - started)
             job["last_error"] = str(exc)
+            metrics.GENERATION_RUNS.labels("failure").inc()
         finally:
+            metrics.GENERATION_DURATION.observe(time.monotonic() - started)
             job["running"] = False
 
     @app.post("/api/reports/generate", status_code=202)

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 
 import httpx
 
+from .. import metrics
 from ..config import AppConfig, ReportConfig
 from ..connectors import Connector, build_connector
 from ..llm import LLMClient
@@ -39,7 +40,11 @@ async def collect(connectors: list[Connector]) -> list[list[Article]]:
         if isinstance(result, Exception):
             log.warning("Collect: source %s failed: %s", connector.source.id, result)
             failed.append(connector.source.id)
+            metrics.SOURCE_FETCHES.labels(connector.source.id, "failure").inc()
+            metrics.SOURCE_ITEMS.labels(connector.source.id).set(0)
             continue
+        metrics.SOURCE_FETCHES.labels(connector.source.id, "success").inc()
+        metrics.SOURCE_ITEMS.labels(connector.source.id).set(len(result))
         per_source.append(result)
     log.info(
         "Collect: %d items from %d of %d sources%s",
@@ -96,6 +101,8 @@ async def write_entries(stories: list[Story], llm: LLMClient | None) -> list[Rep
 
     entries = list(await asyncio.gather(*(summarize(t, top) for t, top in stories)))
     fallback = sum(1 for e in entries if not e.ai_generated)
+    metrics.REPORT_ENTRIES.labels("llm").set(len(entries) - fallback)
+    metrics.REPORT_ENTRIES.labels("fallback").set(fallback)
     log.info("Write: %d entries (%d AI-written, %d fell back to the top source)",
              len(entries), len(entries) - fallback, fallback)
     return entries
