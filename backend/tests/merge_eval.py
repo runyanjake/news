@@ -34,9 +34,11 @@ from app.models import Article
 from app.pipeline.grouping import story_match
 from app.pipeline.preprocess import SUMMARY_CHARS, annotate, embedding_text, preprocess, weigh_terms
 from app.pipeline.text import tokens, unit
+from app.settings import load_settings
 
 DATA = Path(__file__).parent / "data" / "merge"
-REPO_CONFIG = Path(__file__).parents[2] / "config" / "sources.yaml"
+# The deployed config: config/sources.yaml in a checkout, or SOURCES_FILE inside the image.
+REPO_CONFIG = load_settings().sources_file
 LABELS = ("same", "related", "different")
 
 
