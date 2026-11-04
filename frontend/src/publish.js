@@ -1,12 +1,14 @@
 // Site layout: index.html (newest), reports/<date>/ (newest per date), archive/<date>/<stamp>/ (all), archive/, privacy/,
-// assets/ (fonts).
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
+// assets/ (fonts), .format (which report format rendered the site).
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ASSETS_DIR, renderArchive, renderPrivacy, renderReport } from './report-format/index.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STAMP = /^\d{8}T\d{6}Z$/;
+const FORMAT_DIR = fileURLToPath(new URL('./report-format/', import.meta.url));
 
 /** UTC generated_at as YYYYMMDDTHHMMSSZ, matching the backend's generation stamps. */
 export function generationStamp(report) {
@@ -65,4 +67,30 @@ export async function publishSite(siteDir, siteName, sources) {
   for (const name of await readdir(assets)) {
     await writeAtomic(path.join(siteDir, 'assets', name), await readFile(path.join(assets, name)));
   }
+}
+
+/** Hash of everything under report-format/: any layout, style or asset change gives a new version. */
+export async function formatVersion() {
+  const hash = createHash('sha256');
+  for (const name of (await readdir(FORMAT_DIR, { recursive: true })).sort()) {
+    const file = path.join(FORMAT_DIR, name);
+    if ((await stat(file)).isFile()) hash.update(name).update(await readFile(file));
+  }
+  return hash.digest('hex').slice(0, 16);
+}
+
+/** False when the site has no front page or was rendered by a different report format. */
+export async function siteIsCurrent(siteDir) {
+  try {
+    await stat(path.join(siteDir, 'index.html'));
+    return (await readFile(path.join(siteDir, '.format'), 'utf8')) === (await formatVersion());
+  } catch (err) {
+    if (err.code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+/** Record that every page in the site was rendered by the current report format. */
+export async function markFormat(siteDir) {
+  await writeAtomic(path.join(siteDir, '.format'), await formatVersion());
 }

@@ -12,7 +12,7 @@ See README.md for architecture and commands.
 ## Rules
 - New source types: add a `Connector` subclass with `@register("<type>")` and import it in `connectors/__init__.py`. Don't special-case source types in the pipeline.
 - The pipeline must still produce a report when the LLM is unreachable (fallback to the top source).
-- The Report JSON shape (`backend/app/models.py` `Report`) is the contract between the backend and the renderer. Keep changes backward compatible, because old reports are re-rendered by `npm run rebuild`.
+- The Report JSON shape (`backend/app/models.py` `Report`) is the contract between the backend and the renderer. Keep changes backward compatible, because old reports are re-rendered by `npm run rebuild` and automatically at renderer startup whenever `report-format/` changes.
 - The frontend has no npm dependencies; keep it that way unless clearly needed.
 - Fonts: only self-hosted, freely licensed (SIL OFL) files in `frontend/src/report-format/assets/` (copied to `/assets/` by `publishSite`), with generic `serif`/`sans-serif` fallbacks. Don't name proprietary fonts (Georgia, Times, Courier, Arial...) in CSS; a test enforces this.
 - Privacy page: bump `POLICY_UPDATED` in `report-format/index.js` whenever the policy or disclaimer text changes. Its source list comes from `GET /api/sources` (enabled sources in `config/sources.yaml`).

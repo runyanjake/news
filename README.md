@@ -24,7 +24,7 @@ Steps 1–4 build the context (`build_context` in `backend/app/pipeline/run.py`)
 5. **Summarise**: the top N sources of each top topic go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
 6. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
 
-Report layout lives only in `frontend/src/report-format/`. After changing it, run `npm run rebuild` to re-render the whole history from the stored JSON.
+Report layout lives only in `frontend/src/report-format/`. When the renderer starts and anything in that directory has changed since the site was last rendered (tracked by a hash in `<site>/.format`), it re-renders the whole history from the stored JSON, so a deploy updates every page. `npm run rebuild` does the same on demand.
 
 ## Running
 

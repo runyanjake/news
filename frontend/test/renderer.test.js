@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import { createBackend } from '../src/backend.js';
 import { publishLatestIfNew, rebuildAll } from '../src/jobs.js';
-import { publishReport, publishSite } from '../src/publish.js';
+import { formatVersion, publishReport, publishSite, siteIsCurrent } from '../src/publish.js';
 import { renderPrivacy, renderReport } from '../src/report-format/index.js';
 import { msUntilNext } from '../src/schedule.js';
 
@@ -158,6 +158,23 @@ describe('publishReport', () => {
     assert.match(await readFile(path.join(dir, 'index.html'), 'utf8'), /Evening/);
     await readFile(path.join(dir, 'reports/2026-10-21/index.html'));
     assert.match(await readFile(path.join(dir, 'index.html'), 'utf8'), /2026-10-22/);
+  });
+
+  it('a site is current only once rebuilt with this report format', async () => {
+    const backend = {
+      listDates: async () => ['2026-10-22'],
+      getReport: async () => report('2026-10-22'),
+      listGenerations: async () => [],
+      listSources: async () => [],
+    };
+    assert.equal(await siteIsCurrent(dir), false); // fresh volume
+    await publishReport(dir, report('2026-10-22'));
+    assert.equal(await siteIsCurrent(dir), false); // pages from an unknown (older) format
+    await rebuildAll(backend, dir);
+    assert.equal(await siteIsCurrent(dir), true);
+    await writeFile(path.join(dir, '.format'), 'old-format');
+    assert.equal(await siteIsCurrent(dir), false);
+    assert.match(await formatVersion(), /^[0-9a-f]{16}$/);
   });
 
   it('publishLatestIfNew renders a regenerated report once', async () => {

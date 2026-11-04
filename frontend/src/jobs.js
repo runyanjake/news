@@ -1,4 +1,4 @@
-import { publishReport, publishSite } from './publish.js';
+import { markFormat, publishReport, publishSite } from './publish.js';
 
 const publishShared = async (backend, siteDir, report) =>
   publishSite(siteDir, report.site_name, await backend.listSources());
@@ -32,5 +32,6 @@ export async function rebuildAll(backend, siteDir) {
     }
   }
   if (newest) await publishShared(backend, siteDir, newest);
+  await markFormat(siteDir);
   return dates.length;
 }

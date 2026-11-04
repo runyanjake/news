@@ -5,6 +5,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { createBackend } from './backend.js';
 import { generateAndPublish, publishLatestIfNew, rebuildAll } from './jobs.js';
 import { createLogger } from './log.js';
+import { siteIsCurrent } from './publish.js';
 import { msUntilNext } from './schedule.js';
 
 const env = process.env;
@@ -40,20 +41,24 @@ async function runWithRetries() {
   log.error(`Daily render job failed after ${maxAttempts} attempts (${elapsed(started)})`);
 }
 
-/** A fresh site volume has no front page until the first daily run; render one at startup instead. */
-async function ensureFrontPage() {
-  if (existsSync(path.join(siteDir, 'index.html'))) return;
+/**
+ * At startup, render every stored report if the site has no front page yet (fresh volume) or its pages
+ * came from an older report format (a deploy changed layout or styles), so no page keeps the old look.
+ */
+async function ensureCurrentSite() {
+  if (await siteIsCurrent(siteDir)) return;
+  const reason = existsSync(path.join(siteDir, 'index.html')) ? 'Report format changed' : 'No front page';
   let dates;
   for (let attempt = 1; !dates; attempt++) {
     try {
       dates = await backend.listDates();
     } catch (err) {
-      if (attempt >= 30) return log.error(`No front page and backend unreachable: ${err.message}`);
+      if (attempt >= 30) return log.error(`${reason} and backend unreachable: ${err.message}`);
       await sleep(2_000);
     }
   }
   if (dates.length) {
-    log.info(`No front page; re-rendered ${await rebuildAll(backend, siteDir)} stored reports`);
+    log.info(`${reason}; re-rendered ${await rebuildAll(backend, siteDir)} stored reports`);
   } else {
     log.info('No front page and no stored reports; generating one now');
     await runWithRetries();
@@ -75,7 +80,7 @@ async function watchLoop() {
 }
 
 async function schedulerLoop() {
-  await ensureFrontPage();
+  await ensureCurrentSite();
   log.info(`Scheduler started; rendering daily at ${renderTime} (TZ=${env.TZ ?? 'system'})`);
   for (;;) {
     const wait = msUntilNext(new Date(), renderTime);
