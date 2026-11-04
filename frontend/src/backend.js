@@ -29,6 +29,7 @@ export function createBackend({ baseUrl, adminToken, fetchImpl = fetch, pollMs =
     generate,
     getReport,
     listDates: () => call('/api/reports'),
+    listSources: () => call('/api/sources'),
     listGenerations: (date) => call(`/api/reports/${encodeURIComponent(date)}/generations`),
     getGeneration: (date, stamp) =>
       call(`/api/reports/${encodeURIComponent(date)}/generations/${encodeURIComponent(stamp)}`),
