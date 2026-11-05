@@ -82,3 +82,11 @@ def test_llm_request_counts_errors_and_latency():
     with metrics.llm_request("embed"):
         pass
     assert sample("news_llm_requests_total", operation="embed", outcome="success") == ok + 1
+
+
+def test_series_exist_before_the_first_event(settings):
+    settings.sources_file.write_text("sources:\n  - {id: fresh, name: Fresh, type: rss, url: 'https://f/feed'}\n")
+    text = TestClient(create_app(settings)).get("/metrics").text
+    assert 'news_source_fetches_total{outcome="failure",source="fresh"}' in text
+    assert 'news_generation_runs_total{outcome="failure"}' in text
+    assert 'news_llm_requests_total{operation="embed",outcome="error"}' in text

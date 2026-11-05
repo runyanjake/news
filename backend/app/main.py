@@ -29,6 +29,10 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         settings.llm_base_url, settings.llm_model, settings.llm_api_key, settings.llm_timeout
     )
     app = FastAPI(title="PWS News")
+    try:
+        metrics.track_sources(s.id for s in load_config(settings.sources_file).sources if s.enabled)
+    except Exception as exc:  # a bad config fails the generation run, with a clearer error than here
+        log.warning("Metrics: could not read sources to pre-create their series: %s", exc)
 
     @app.get("/api/health")
     def health() -> dict:

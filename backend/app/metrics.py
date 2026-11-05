@@ -41,6 +41,25 @@ LLM_DURATION = Histogram(
     buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
 )
 
+# Create every labelled series at 0 up front: a series that first appears at 1 is invisible to increase(),
+# so the first run after a restart (often the only one that day) would not be counted.
+for _outcome in ("success", "failure"):
+    GENERATION_RUNS.labels(_outcome)
+for _writer in ("llm", "fallback"):
+    REPORT_ENTRIES.labels(_writer)
+for _operation in ("chat", "embed"):
+    LLM_DURATION.labels(_operation)
+    for _outcome in ("success", "error"):
+        LLM_REQUESTS.labels(_operation, _outcome)
+
+
+def track_sources(source_ids) -> None:
+    """Create the per-source series at 0, so a source's first failure registers as an increase."""
+    for source_id in source_ids:
+        SOURCE_ITEMS.labels(source_id)
+        for outcome in ("success", "failure"):
+            SOURCE_FETCHES.labels(source_id, outcome)
+
 
 @contextmanager
 def llm_request(operation: str):
