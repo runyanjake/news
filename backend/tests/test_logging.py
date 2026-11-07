@@ -5,7 +5,8 @@ from app.config import PipelineConfig, ReportConfig
 from app.logs import LOG_FORMAT, UTCFormatter
 from app.models import Report, ReportEntry, SourceRef, Topic
 from app.pipeline.preprocess import preprocess
-from app.pipeline.run import describe_report, select_topics
+from app.pipeline.run import describe_report
+from app.pipeline.selection import select_topics
 
 from .conftest import NOW, article
 
@@ -58,9 +59,9 @@ def test_preprocess_drops_repeats_within_a_feed_before_the_cap(caplog):
 
 def test_select_logs_what_was_skipped(caplog):
     world = [Topic(name=f"W{i}", articles=[article(f"W{i}", tags=["world"])], score=9 - i) for i in range(3)]
-    with caplog.at_level(logging.INFO, logger="app.pipeline.run"):
+    with caplog.at_level(logging.INFO, logger="app.pipeline.selection"):
         select_topics(world, ReportConfig(max_entries=5, max_entries_per_tag=1))
-    assert caplog.messages == ["Select: 1 of 3 stories (skipped 2 over the per-section cap of 1 (world 2))"]
+    assert caplog.messages == ["Select: 1 of 3 stories (1 section leads; skipped 2 over the per-section cap of 1 (world 2))"]
 
 
 def test_report_title_comes_from_the_backend():

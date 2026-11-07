@@ -6,19 +6,19 @@
 
 import asyncio
 import logging
-from collections import Counter
 from datetime import UTC, datetime
 
 import httpx
 
 from .. import metrics
-from ..config import AppConfig, ReportConfig
+from ..config import AppConfig
 from ..connectors import Connector, build_connector
 from ..llm import LLMClient
-from ..models import Article, Report, ReportEntry, Topic
+from ..models import Article, Report, ReportEntry
 from .grouping import group_articles
 from .preprocess import embed_articles, preprocess
-from .scoring import best_per_source, score_topics
+from .scoring import score_topics
+from .selection import Story, select_topics
 from .summarize import summarize_topic
 
 log = logging.getLogger(__name__)
@@ -26,9 +26,6 @@ log = logging.getLogger(__name__)
 USER_AGENT = "PWSNews/0.1 (+https://github.com/runyanjake/news)"
 FETCH_TIMEOUT_SECONDS = 20
 LLM_CONCURRENCY = 2
-
-Story = tuple[Topic, list[Article]]  # a ranked topic and the top sources shown for it
-
 
 async def collect(connectors: list[Connector]) -> list[list[Article]]:
     """Raw items per source; failed sources contribute nothing."""
@@ -54,41 +51,13 @@ async def collect(connectors: list[Connector]) -> list[list[Article]]:
     return per_source
 
 
-def select_topics(ranked: list[Topic], config: ReportConfig) -> list[Story]:
-    """Best topics with their top sources, capping each section (the top source's first tag)."""
-    cap = config.max_entries_per_tag
-    selected, per_tag, thin, capped = [], Counter(), 0, Counter()
-    for topic in ranked:
-        top = best_per_source(topic)[: config.sources_per_entry]
-        if len(top) < config.min_sources_per_entry:
-            thin += 1
-            continue
-        section = top[0].tags[0] if top[0].tags else None
-        if section and cap is not None and per_tag[section] >= cap:
-            capped[section] += 1
-            continue
-        per_tag[section] += 1
-        selected.append((topic, top))
-        if len(selected) == config.max_entries:
-            break
-    skipped = [f"{thin} with fewer than {config.min_sources_per_entry} sources"] if thin else []
-    if capped:
-        by_tag = ", ".join(f"{tag} {n}" for tag, n in capped.most_common())
-        skipped.append(f"{capped.total()} over the per-section cap of {cap} ({by_tag})")
-    log.info(
-        "Select: %d of %d stories%s",
-        len(selected), len(ranked), f" (skipped {'; '.join(skipped)})" if skipped else "",
-    )
-    return selected
-
-
 async def build_context(
     config: AppConfig, llm: LLMClient | None, connectors: list[Connector], now: datetime
 ) -> list[Story]:
     articles = preprocess(await collect(connectors), config.pipeline, now)
     await embed_articles(articles, llm, config.grouping.embeddings)
     topics = await group_articles(articles, config.grouping, llm)
-    ranked = score_topics(topics, config.scoring, now, config.report.sources_per_entry)
+    ranked = score_topics(topics, config.scoring, now)
     return select_topics(ranked, config.report)
 
 

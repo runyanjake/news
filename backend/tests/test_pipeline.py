@@ -5,7 +5,7 @@ from app.models import Topic
 from app.pipeline import generate_report
 from app.pipeline.grouping import group_articles, group_by_keywords
 from app.pipeline.preprocess import preprocess
-from app.pipeline.run import select_topics
+from app.pipeline.selection import select_topics
 from app.pipeline.scoring import score_topics
 
 from .conftest import NOW, FailingConnector, FakeLLM, StaticConnector, article
@@ -37,7 +37,7 @@ def test_multi_source_story_outranks_single_source():
         ],
         GroupingConfig(),
     )
-    ranked = score_topics(topics, ScoringConfig(), NOW, sources_per_entry=5)
+    ranked = score_topics(topics, ScoringConfig(), NOW)
     assert len(ranked[0].articles) == 2
     assert ranked[0].score > ranked[1].score
 
@@ -50,7 +50,7 @@ def test_recency_and_reputation_order_articles():
         ],
         GroupingConfig(),
     )
-    ranked = score_topics(topics, ScoringConfig(), NOW, sources_per_entry=5)
+    ranked = score_topics(topics, ScoringConfig(), NOW)
     assert [a.source_id for a in ranked[0].articles] == ["fresh", "old"]
 
 

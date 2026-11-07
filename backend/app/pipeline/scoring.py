@@ -1,10 +1,18 @@
-"""Score articles (reputation / recency / relevance) and rank topics by them."""
+"""Score articles (reputation / recency / relevance), then score each story from its sources.
+
+A story's score is a weighted mix of signals in 0..1, so one cutoff means the same thing every day:
+- coverage: how many outlets carry it, weighted by their reputation, with diminishing returns;
+- lead: the score of its best article (reputable, fresh, central to the story);
+- breadth: how many sections' outlets (world, business, ...) cover it.
+"""
 
 from datetime import datetime
 
-from ..config import ScoringConfig
+from ..config import ScoringConfig, StoryScoringConfig
 from ..models import Article, Topic
 from .text import jaccard
+
+BREADTH_SECTIONS = 3  # sections covering a story for full breadth credit
 
 
 def recency(article: Article, now: datetime, half_life_hours: float) -> float:
@@ -32,11 +40,28 @@ def best_per_source(topic: Topic) -> list[Article]:
     return sorted(best.values(), key=lambda a: a.score, reverse=True)
 
 
-def score_topics(
-    topics: list[Topic], config: ScoringConfig, now: datetime, sources_per_entry: int
-) -> list[Topic]:
+def section_of(article: Article) -> str | None:
+    """An article's section is its source's first tag."""
+    return article.tags[0] if article.tags else None
+
+
+def story_signals(sources: list[Article], config: StoryScoringConfig) -> dict[str, float]:
+    """The story's signals in 0..1, from the best article of each source (best first)."""
+    if not sources:
+        return {"coverage": 0.0, "lead": 0.0, "breadth": 0.0}
+    weighted_sources = sum(a.reputation for a in sources)
+    sections = {s for a in sources if (s := section_of(a))}
+    return {
+        "coverage": 1 - 0.5 ** (weighted_sources / config.coverage_half),
+        "lead": sources[0].score,
+        "breadth": min(max(len(sections) - 1, 0) / (BREADTH_SECTIONS - 1), 1.0),
+    }
+
+
+def score_topics(topics: list[Topic], config: ScoringConfig, now: datetime) -> list[Topic]:
     """Mutates scores in place and returns topics ranked best first."""
     weights = config.weights
+    story_weights = config.story.weights
     for topic in topics:
         for article in topic.articles:
             article.score = round(
@@ -46,6 +71,6 @@ def score_topics(
                 4,
             )
         topic.articles.sort(key=lambda a: a.score, reverse=True)
-        # Summing the best article per source lets multi-outlet stories outrank single-source ones.
-        topic.score = round(sum(a.score for a in best_per_source(topic)[:sources_per_entry]), 4)
+        signals = story_signals(best_per_source(topic), config.story)
+        topic.score = round(sum(story_weights.get(name, 0) * value for name, value in signals.items()), 4)
     return sorted(topics, key=lambda t: t.score, reverse=True)
