@@ -7,7 +7,7 @@ A news aggregator inspired by https://news.dws.rip, offering a periodically rend
 flowchart LR
   cfg[config/sources.yaml] --> be
   subgraph be[backend · Python/FastAPI]
-    c[connectors] --> p[preprocess] --> g[group + merge stories] --> s[score sources] --> l[LLM tagline + summary]
+    c[connectors] --> p[preprocess] --> g[group + merge stories] --> s[score stories] --> sel[select 10–20] --> l[LLM tagline + summary]
   end
   be -- report JSON history --> data1[(data/reports)]
   r[renderer · Node] -- 08:00 daily: generate + poll --> be
@@ -15,14 +15,15 @@ flowchart LR
   data2 --> n[nginx] --> u((readers))
 ```
 
-Steps 1–4 build the context (`build_context` in `backend/app/pipeline/run.py`); step 5 is where the LLM writes the report (`write_entries`).
+Steps 1–5 build the context (`build_context` in `backend/app/pipeline/run.py`); step 5 is where the LLM writes the report (`write_entries`).
 
 1. **Collect**: every source in `config/sources.yaml` is fetched by a connector (`backend/app/connectors/`). RSS ships today. Other source types (Twitter/X, JSON APIs) subclass `Connector` and register a new `type`.
 2. **Preprocess**: drops stale items, caps items per source, and keeps one copy of each article (by URL, ignoring tracking params; the most reputable feed's copy wins). It also annotates each article with the derived fields later stages share. This step only limits what goes into the context.
 3. **Group**: articles are bucketed into topics. The `keywords` method applies manual rules from the config, then title-similarity clustering. The `llm` method asks the LLM to cluster, and falls back to `keywords` if that fails. Topics that cover the same story are then merged, so each story is one report entry whose sources may come from several groups. Topics merge on a shared URL, or when their TF-IDF vectors (titles + summaries, with each feed's boilerplate removed) reach `grouping.merge_threshold`, share at least three distinctive words, and at least one pair of their articles also reaches the threshold on its own (so a broad topic can't absorb an article that only shares its theme). These comparison keys are derived fields; headlines, summaries and links pass to the report unchanged.
-4. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. A topic's score is the sum of its best article from each source, so stories covered by several outlets rank higher.
-5. **Summarise**: the top N sources of each top topic go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
-6. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
+4. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. Each story then gets a weighted mix (`scoring.story.weights`) of three signals, each 0..1, so a score means the same thing every day: *coverage* (how many outlets carry it, reputation-weighted, with diminishing returns: `coverage_half` weighted sources earn half the credit), *lead* (its best article's score) and *breadth* (how many sections' outlets cover it). With the shipped config a well-sourced single-outlet story scores about 0.4, two outlets about 0.5–0.55, three or more 0.6 and up.
+5. **Select** (`backend/app/pipeline/selection.py`): between `report.min_entries` and `max_entries` stories. A story's section is the most common first tag of its sources. First each section's best story gets in, so every section is covered (`cover_sections`). The rest fill by score, at most `max_entries_per_tag` per section. Past `min_entries`, each further story must clear a cutoff that rises linearly from `cutoff_start` to `cutoff_end` at `max_entries`, and selection stops at the first that falls short. A busy day gets a longer report and a quiet one a shorter one. The `Select:` log line gives the count, the section leads and the reason selection stopped; tune the weights and cutoffs against it.
+6. **Summarise**: the top N sources of each selected story go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
+7. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
 
 Report layout lives only in `frontend/src/report-format/`. After changing it, run `npm run rebuild` to re-render the whole history from the stored JSON.
 

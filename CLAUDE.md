@@ -4,7 +4,7 @@ See README.md for architecture and commands.
 
 ## Layout
 - `config/sources.yaml`: the only place sources and pipeline/scoring/report knobs are configured. Secrets are referenced as `${ENV}` and live in `.env`.
-- `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → group → score → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history: `<date>.json` is the newest generation, `generations/<date>/<stamp>.json` keeps every one), `main.py` (routes), `metrics.py` (Prometheus metrics at `GET /metrics`).
+- `backend/app/`: FastAPI service. `connectors/` (source adapters), `pipeline/` (collect → preprocess → group → score → select → summarize), `llm.py` (OpenAI-compatible client), `storage.py` (report JSON history: `<date>.json` is the newest generation, `generations/<date>/<stamp>.json` keeps every one), `main.py` (routes), `metrics.py` (Prometheus metrics at `GET /metrics`).
 - `frontend/src/`: Node renderer and scheduler. `report-format/` holds ALL page layout and styling. Keep presentation out of `publish.js`, `jobs.js` and `main.js`.
 - `nginx/nginx.conf`: static serving and cache headers. Pages that are rewritten in place (front page, `/reports/<date>/`, indexes) must stay `no-cache`, and don't re-enable `open_file_cache`, or readers see stale pages after a new generation.
 - `Dockerfile`: runtime image per service (compose `target:`). `Dockerfile.test`: CI lint/tests layered on those images.
@@ -17,6 +17,7 @@ See README.md for architecture and commands.
 - Fonts: only self-hosted, freely licensed (SIL OFL) files in `frontend/src/report-format/assets/` (copied to `/assets/` by `publishSite`), with generic `serif`/`sans-serif` fallbacks. Don't name proprietary fonts (Georgia, Times, Courier, Arial...) in CSS; a test enforces this.
 - Metrics: define them in `backend/app/metrics.py` with a `news_` prefix and keep label values bounded (source ids, outcomes; never URLs or headlines). Document new ones in the README Metrics table. `/metrics` stays off the nginx config.
 - Privacy page: bump `POLICY_UPDATED` in `report-format/index.js` whenever the policy or disclaimer text changes. Its source list comes from `GET /api/sources` (enabled sources in `config/sources.yaml`).
+- Story scores and selection cutoffs assume each story signal stays in 0..1. Keep new signals in that range, and recheck `report.cutoff_*` in `config/sources.yaml` when you change `scoring.story`.
 
 ## Checks
 - `cd backend && ../.venv/bin/python -m pytest` (venv: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt`)

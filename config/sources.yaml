@@ -160,15 +160,28 @@ grouping:
   topics: []
 
 scoring:
-  weights:
+  weights:                   # per article, each signal 0..1
     reputation: 0.5
     recency: 0.3
     relevance: 0.2
   recency_half_life_hours: 12
+  story:                     # per story, each signal 0..1, so story scores are comparable across days
+    weights:
+      coverage: 0.6          # outlets carrying it, reputation-weighted, diminishing returns
+      lead: 0.3              # score of its best article
+      breadth: 0.1           # sections whose outlets cover it (full credit at 3)
+    coverage_half: 1.5       # reputation-weighted sources that earn half the coverage credit
 
 report:
   site_name: PWS NEWS        # shown on every page; report titles are "<site_name> — <date>"
-  max_entries: 15            # topics that make it into the report
+  min_entries: 10            # always this many stories (when there are enough)
+  max_entries: 20            # never more
+  # Past min_entries, the next story needs a score rising from cutoff_start (story 11) to
+  # cutoff_end (story 20); selection stops at the first that falls short. Roughly: 0.5 is a
+  # well-sourced two-outlet story, 0.6 three outlets, single-source stories score ~0.4.
+  cutoff_start: 0.5
+  cutoff_end: 0.6
+  cover_sections: true       # each section's best story gets in first, whatever its score
   sources_per_entry: 5       # top N sources fed to the LLM and listed per entry
   min_sources_per_entry: 1
-  max_entries_per_tag: 4     # per section (top source's first tag); omit for no cap
+  max_entries_per_tag: 6     # per section (most common first tag of its sources); omit for no cap
