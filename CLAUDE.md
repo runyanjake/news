@@ -16,7 +16,7 @@ See README.md for architecture and commands.
 - The frontend has no npm dependencies; keep it that way unless clearly needed.
 - Fonts: only self-hosted, freely licensed (SIL OFL) files in `frontend/src/report-format/assets/` (copied to `/assets/` by `publishSite`), with generic `serif`/`sans-serif` fallbacks. Don't name proprietary fonts (Georgia, Times, Courier, Arial...) in CSS; a test enforces this.
 - Metrics: define them in `backend/app/metrics.py` with a `news_` prefix and keep label values bounded (source ids, outcomes; never URLs or headlines). Document new ones in the README Metrics table. `/metrics` stays off the nginx config.
-- Privacy page: bump `POLICY_UPDATED` in `report-format/index.js` whenever the policy or disclaimer text changes. Its source list comes from `GET /api/sources` (enabled sources in `config/sources.yaml`).
+- Site pages: `/privacy/`, `/disclaimer/` and `/sources/` are separate pages linked from the footer. Bump `POLICY_UPDATED` in `report-format/index.js` whenever the privacy policy or disclaimer text changes. The sources page list comes from `GET /api/sources` (enabled sources in `config/sources.yaml`).
 - Story scores and selection cutoffs assume each story signal stays in 0..1. Keep new signals in that range, and recheck `report.cutoff_*` in `config/sources.yaml` when you change `scoring.story`.
 
 ## Checks
