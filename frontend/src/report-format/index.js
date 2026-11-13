@@ -39,7 +39,10 @@ function page(siteName, title, body) {
 <body>
 <header><h1><a href="/">${escape(siteName)}</a></h1></header>
 ${body}
-<footer><a href="/archive/">Archive</a> · <a href="/sources/">Sources</a> · <a href="/privacy/">Privacy Policy</a> · <a href="/disclaimer/">Disclaimer</a> · Headlines and summaries are AI-generated from the linked sources.</footer>
+<footer>
+<p>Headlines and summaries are AI-generated from the linked sources.</p>
+<p><a href="/archive/">Archive</a> · <a href="/sources/">Sources</a> · <a href="/privacy/">Privacy Policy</a> · <a href="/disclaimer/">Disclaimer</a></p>
+</footer>
 ${PREFS}
 </body>
 </html>

@@ -75,6 +75,11 @@ describe('report format', () => {
     }
   });
 
+  it('puts the AI disclaimer above the footer links', () => {
+    const html = renderReport(report('2026-10-22'));
+    assert.match(html, /<footer>\s*<p>Headlines and summaries are AI-generated[^<]*<\/p>\s*<p><a href="\/archive\/">/);
+  });
+
   it('privacy page has only the dated policy', () => {
     const html = renderPrivacy('PWS NEWS');
     assert.match(html, /<h2>Privacy Policy<\/h2>\s*<p class="updated">Last updated: <time datetime="\d{4}-\d{2}-\d{2}">/);
