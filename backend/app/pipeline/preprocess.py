@@ -60,8 +60,8 @@ def weigh_terms(articles: list[Article]) -> None:
         article.vector = vector
 
 
-def embedding_text(article: Article) -> str:
-    return f"{article.title}\n{article.summary[:SUMMARY_CHARS]}"
+def embedding_text(article: Article, prefix: str = "") -> str:
+    return f"{prefix}{article.title}\n{article.summary[:SUMMARY_CHARS]}"
 
 
 async def embed_articles(articles: list[Article], llm: LLMClient | None, config: EmbeddingConfig | None) -> None:
@@ -77,7 +77,7 @@ async def embed_articles(articles: list[Article], llm: LLMClient | None, config:
         for start in range(0, len(articles), config.batch_size):
             batch = articles[start : start + config.batch_size]
             batch_started = time.monotonic()
-            embedded, used = await llm.embed([embedding_text(a) for a in batch], config.model)
+            embedded, used = await llm.embed([embedding_text(a, config.prefix) for a in batch], config.model)
             requests += 1
             tokens_used = None if used is None or tokens_used is None else tokens_used + used
             vectors += [unit(v) for v in embedded]
