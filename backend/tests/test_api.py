@@ -26,14 +26,18 @@ def test_reports_history(settings):
     assert client.get("/api/reports/..%2Fsecrets").status_code in (400, 404)
 
 
-def test_sources_lists_enabled_names_only(settings):
+def test_sources_lists_enabled_sources_without_feed_urls(settings):
     settings.sources_file.write_text(
         "sources:\n"
-        "  - {id: a, name: Alpha, type: rss, url: 'https://a/feed', tags: [world]}\n"
+        "  - {id: a, name: Alpha, type: rss, url: 'https://a/feed', homepage: 'https://a/', tags: [world]}\n"
         "  - {id: b, name: Beta, type: rss, url: 'https://b/feed', enabled: false}\n"
+        "  - {id: c, name: Gamma, type: rss, url: 'https://c/feed'}\n"
     )
     client = TestClient(create_app(settings))
-    assert client.get("/api/sources").json() == [{"name": "Alpha", "tags": ["world"]}]
+    assert client.get("/api/sources").json() == [
+        {"name": "Alpha", "tags": ["world"], "homepage": "https://a/"},
+        {"name": "Gamma", "tags": [], "homepage": None},
+    ]
 
 
 def test_latest_404_when_empty(settings):

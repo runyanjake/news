@@ -95,6 +95,16 @@ describe('report format', () => {
     assert.match(renderSources('PWS NEWS'), /No sources are configured/);
   });
 
+  it('sources page links each source to its homepage when it has one', () => {
+    const html = renderSources('PWS NEWS', [
+      { name: 'Beta' },
+      { name: 'Alpha', homepage: 'https://alpha.example/' },
+      { name: 'Alpha', homepage: null },
+      { name: 'Gamma', homepage: 'javascript:alert(1)' },
+    ]);
+    assert.match(html, /<li><a href="https:\/\/alpha\.example\/" rel="noopener">Alpha<\/a><\/li><li>Beta<\/li><li><a href="#"/);
+  });
+
   it('uses only self-hosted OFL fonts with generic fallbacks', () => {
     const html = renderReport(report('2026-10-22'));
     assert.match(html, /url\('\/assets\/source-serif-4\.woff2'\)/);

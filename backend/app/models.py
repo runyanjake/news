@@ -12,6 +12,7 @@ class SourceConfig(BaseModel):
     name: str
     type: str
     url: str | None = None
+    homepage: str | None = None  # publisher's site, linked from the sources page
     reputation: float = Field(default=0.5, ge=0.0, le=1.0)
     tags: list[str] = Field(default_factory=list)
     enabled: bool = True

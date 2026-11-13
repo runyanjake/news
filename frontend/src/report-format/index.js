@@ -125,10 +125,20 @@ reflect the views of ${name}, PWS or Whitney.rip. Please refer to the original s
 </article>`);
 }
 
-/** `sources`: [{name}] from the backend's GET /api/sources; listed once each, alphabetically. */
+/**
+ * `sources`: [{name, homepage?}] from the backend's GET /api/sources; listed once each, alphabetically,
+ * linked to the publisher's homepage when one is configured.
+ */
 export function renderSources(siteName, sources = []) {
-  const names = [...new Set(sources.map((s) => s.name))].sort((a, b) => a.localeCompare(b));
-  const list = names.map((n) => `<li>${escape(n)}</li>`).join('');
+  const homepages = new Map();
+  for (const s of sources) if (!homepages.get(s.name)) homepages.set(s.name, s.homepage);
+  const names = [...homepages.keys()].sort((a, b) => a.localeCompare(b));
+  const list = names
+    .map((n) => {
+      const home = homepages.get(n);
+      return home ? `<li><a href="${safeUrl(home)}" rel="noopener">${escape(n)}</a></li>` : `<li>${escape(n)}</li>`;
+    })
+    .join('');
   return page(siteName, `${siteName} — Sources`, `<article class="policy">
 <h2>Sources</h2>
 ${list ? `<ul class="source-list">${list}</ul>` : '<p>No sources are configured.</p>'}
