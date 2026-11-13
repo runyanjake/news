@@ -44,6 +44,7 @@ class Topic(BaseModel):
     name: str
     articles: list[Article]
     score: float = 0.0
+    central: list[Article] = Field(default_factory=list)  # most central articles; the LLM writes from these
 
 
 class SourceRef(BaseModel):

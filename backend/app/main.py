@@ -26,7 +26,8 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
     settings = settings or load_settings()
     store = ReportStore(settings.reports_dir)
     llm = llm or LLMClient(
-        settings.llm_base_url, settings.llm_model, settings.llm_api_key, settings.llm_timeout
+        settings.llm_base_url, settings.llm_model, settings.llm_api_key, settings.llm_timeout,
+        settings.embedding_base_url,
     )
     app = FastAPI(title="PWS News")
 

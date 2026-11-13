@@ -148,14 +148,13 @@ pipeline:
   max_items_per_source: 30
 
 grouping:
-  method: keywords           # "keywords" (rules + title similarity) or "llm" (falls back to keywords)
-  similarity_threshold: 0.25  # headline word overlap for clustering
-  merge_threshold: 0.2       # TF-IDF cosine (title + summary) at which two topics are one story
-  # Optional: embed title + summary with the LLM server and merge on embedding similarity
-  # (TF-IDF still supplies the shared-terms check, and is the fallback if embedding fails).
-  # embeddings:
-  #   model: nomic-embed-text
-  #   merge_threshold: 0.8     # calibrate: cd backend && python -m tests.merge_eval --embeddings
+  # Stories are average-linkage clusters of article vectors (see backend/app/pipeline/grouping.py).
+  embeddings:                # embed title + RSS description at EMBEDDING_BASE_URL (default: the LLM server)
+    model: nomic-embed-text
+    threshold: 0.8           # average embedding cosine at which two clusters are one story
+  tfidf_threshold: 0.2       # the same on TF-IDF word vectors, used if embedding fails
+  central_articles: 4        # a story's most central articles, which the LLM writes its headline from
+  # Optional keyword rules pin matching headlines into one story before clustering.
   # Keep rules story-sized, e.g. {name: Ukraine War, keywords: [ukraine, kyiv]}; broad ones merge unrelated stories.
   topics: []
 

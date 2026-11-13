@@ -15,8 +15,11 @@ class LLMError(RuntimeError):
 
 
 class LLMClient:
-    def __init__(self, base_url: str, model: str, api_key: str = "", timeout: float = 120):
+    def __init__(
+        self, base_url: str, model: str, api_key: str = "", timeout: float = 120, embedding_base_url: str = ""
+    ):
         self.base_url = base_url
+        self.embedding_base_url = embedding_base_url or base_url
         self.model = model
         self.api_key = api_key
         self.timeout = timeout
@@ -30,7 +33,7 @@ class LLMClient:
             with metrics.llm_request("embed"):
                 async with httpx.AsyncClient(timeout=self.timeout) as client:
                     response = await client.post(
-                        f"{self.base_url}/embeddings",
+                        f"{self.embedding_base_url}/embeddings",
                         json={"model": model, "input": texts},
                         headers=self._headers(),
                     )

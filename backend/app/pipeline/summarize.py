@@ -22,10 +22,11 @@ def _prompt(articles: list[Article]) -> str:
 
 
 async def summarize_topic(topic: Topic, top: list[Article], llm: LLMClient | None) -> ReportEntry:
+    """The LLM writes from the story's most central articles; sources list its top-scored ones."""
     tagline, summary, ai = top[0].title, top[0].summary[:400], False
     if llm is not None:
         try:
-            result = await llm.complete_json(SYSTEM_PROMPT, _prompt(top))
+            result = await llm.complete_json(SYSTEM_PROMPT, _prompt(topic.central or top))
             tagline = str(result.get("tagline") or tagline).strip()
             summary = str(result.get("summary") or summary).strip()
             ai = True

@@ -5,3 +5,4 @@ feedparser==6.0.14
 PyYAML==6.0.3
 pydantic==2.14.1
 prometheus-client==0.26.0
+numpy==2.4.6

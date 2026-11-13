@@ -15,6 +15,7 @@ pipeline {
         LLM_BASE_URL         = 'http://llm-server:8080/v1'
         LLM_MODEL            = 'llama3.1'
         LLM_TIMEOUT_SECONDS  = '120'
+        EMBEDDING_BASE_URL   = ''
         DOCKER_BUILDKIT      = '1'
 
         ADMIN_TOKEN          = credentials('news-admin-token')
@@ -52,7 +53,7 @@ pipeline {
                     # docker-compose.yml loads runtime config from .env; regenerate it from Jenkins on every build.
                     umask 077
                     {
-                        for var in TZ RENDER_TIME ADMIN_TOKEN LLM_BASE_URL LLM_MODEL LLM_API_KEY LLM_TIMEOUT_SECONDS NEWS_HOST; do
+                        for var in TZ RENDER_TIME ADMIN_TOKEN LLM_BASE_URL LLM_MODEL LLM_API_KEY LLM_TIMEOUT_SECONDS EMBEDDING_BASE_URL NEWS_HOST; do
                             printf '%s=%s\\n' "$var" "${!var}"
                         done
                     } > .env

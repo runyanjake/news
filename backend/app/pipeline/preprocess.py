@@ -9,6 +9,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 
+from .. import metrics
 from ..config import EmbeddingConfig, PipelineConfig
 from ..llm import LLMClient, LLMError
 from ..models import Article
@@ -66,7 +67,7 @@ def embedding_text(article: Article) -> str:
 async def embed_articles(articles: list[Article], llm: LLMClient | None, config: EmbeddingConfig | None) -> None:
     """Attach one embedding per article (title + summary), held in memory for this run only.
 
-    Any failure leaves every article without an embedding, so merging falls back to TF-IDF.
+    Any failure leaves every article without an embedding, so clustering falls back to TF-IDF.
     """
     if config is None or llm is None or not articles:
         return
@@ -82,14 +83,20 @@ async def embed_articles(articles: list[Article], llm: LLMClient | None, config:
             vectors += [unit(v) for v in embedded]
             log.debug("Embed: batch %d (%d documents) in %.2fs", requests, len(batch), time.monotonic() - batch_started)
     except LLMError as exc:
+        metrics.EMBED_RUNS.labels("failure").inc()
         log.warning(
-            "Embed: failed after %.1fs (%d of %d documents done), merging on TF-IDF only: %s",
+            "Embed: failed after %.1fs (%d of %d documents done), clustering on TF-IDF only: %s",
             time.monotonic() - started, len(vectors), len(articles), exc,
         )
         return
     for article, vector in zip(articles, vectors, strict=True):
         article.embedding = vector
     elapsed = time.monotonic() - started
+    metrics.EMBED_RUNS.labels("success").inc()
+    metrics.EMBED_DURATION.observe(elapsed)
+    metrics.EMBED_DOCUMENTS.set(len(vectors))
+    if tokens_used is not None:
+        metrics.EMBED_TOKENS.set(tokens_used)
     log.info(
         "Embed: %d documents -> %d embeddings (1 per document, %d dimensions%s) with %s "
         "in %.2fs (%.1f ms per document, %d request(s))",

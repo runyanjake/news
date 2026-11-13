@@ -1,12 +1,16 @@
-"""Story merging: one report entry per story, decided on derived keys only."""
+"""Story clustering: one report entry per story, decided on derived keys only."""
 
 import asyncio
 import logging
 
+import numpy as np
+
+from app import metrics
 from app.config import AppConfig, EmbeddingConfig, GroupingConfig, PipelineConfig, TopicRule
 from app.models import Topic
 from app.pipeline import generate_report
-from app.pipeline.grouping import group_articles, merge_stories
+from app.pipeline.grouping import average_linkage, central_order, group_articles
+from app.pipeline.summarize import summarize_topic
 from app.pipeline.preprocess import embed_articles, preprocess, weigh_terms
 from app.pipeline.text import tokens
 
@@ -44,23 +48,22 @@ def weighed(*articles):
     return list(articles)
 
 
-def topics(*articles):
-    return [Topic(name=a.title, articles=[a]) for a in articles]
+def sizes(*articles, **config):
+    """Story sizes from clustering the articles, in the order stories come out."""
+    return [len(t.articles) for t in group_articles(list(articles), GroupingConfig(**config))]
 
 
 def test_tokens_normalise_acronyms_possessives_and_plurals():
     assert tokens("U.S. Strikes Iran’s island") == tokens("US strike Iran islands") == {"us", "strike", "iran", "island"}
 
 
-def test_reworded_coverage_of_one_event_merges():
-    merged = merge_stories(topics(*weighed(STRIKE_BBC, STRIKE_WSJ)), threshold=0.2)
-    assert [len(t.articles) for t in merged] == [2]
+def test_reworded_coverage_of_one_event_clusters():
+    assert sizes(*weighed(STRIKE_BBC, STRIKE_WSJ)) == [2]
 
 
-def test_shared_context_words_alone_do_not_merge():
+def test_shared_context_words_alone_do_not_cluster():
     # Both mention the midterms, but one is a military strike and the other the vote itself.
-    merged = merge_stories(topics(*weighed(STRIKE_BBC, LIVE_BLOG)), threshold=0.2)
-    assert [len(t.articles) for t in merged] == [1, 1]
+    assert sizes(*weighed(STRIKE_BBC, LIVE_BLOG)) == [1, 1]
 
 
 def test_feed_boilerplate_does_not_make_items_alike():
@@ -70,62 +73,79 @@ def test_feed_boilerplate_does_not_make_items_alike():
         article("Cities are changing and architects must adapt", source="nature", summary=doi.format(2)),
         article("Cholesterol drug flops in the clinic", source="nature", summary=doi.format(3)),
     ]
-    merged = merge_stories(topics(*weighed(*nature)), threshold=0.2)
-    assert len(merged) == 3
+    assert sizes(*weighed(*nature)) == [1, 1, 1]
 
 
 def test_needs_several_shared_terms():
     a, b = article("A", source="a"), article("B", source="b")
     a.vector, b.vector = {"rule": 0.8, "need": 0.6}, {"rule": 0.6, "need": 0.8}  # cosine 0.96, 2 terms
-    assert len(merge_stories(topics(a, b), threshold=0.2)) == 2
+    assert sizes(a, b) == [1, 1]
 
 
-def test_broad_topic_does_not_absorb_an_article_sharing_only_its_theme():
-    # A live blog plus explainers: together they look like "midterms" (combined cosine 0.36),
-    # but the strike story matches none of them individually (best pair 0.18).
-    theme = {"midterm": 0.3, "election": 0.3, "vote": 0.3}
-    members = [article(f"Midterm piece {i}", source=f"m{i}") for i in range(6)]
-    for i, member in enumerate(members):
-        member.vector = {**theme, f"detail{i}a": 1.0, f"detail{i}b": 1.0, f"detail{i}c": 1.0}
-    strike = article("US strikes Iranian island ahead of midterm elections", source="bbc")
-    strike.vector = {"midterm": 1.0, "election": 1.0, "vote": 1.0, "strike": 1.0, "island": 1.0, "qeshm": 1.0,
-                     "iran": 1.0, "hormuz": 1.0}
-    merged = merge_stories([Topic(name="Midterms", articles=members), *topics(strike)], threshold=0.2)
-    assert [t.name for t in merged] == ["Midterms", strike.title]
+def test_average_linkage_does_not_chain_through_one_bridging_article():
+    # a~b and b~c are close, a~c is not: single linkage would chain all three.
+    sim = np.array([[1.0, 0.9, 0.1], [0.9, 1.0, 0.5], [0.1, 0.5, 1.0]])
+    terms = [{"x", "y", "z"}] * 3
+    assert average_linkage(sim, terms, 0.6).clusters == [[0, 1], [2]]
+    assert average_linkage(sim, terms, 0.25).clusters == [[0, 1, 2]]  # (0.1 + 0.5) / 2 = 0.3
 
 
-def test_topic_bridging_two_others_collapses_all_three():
-    a, b, c = (article(name, source=name) for name in "abc")
-    a.vector = {"x1": 1.0, "x2": 1.0, "x3": 1.0}
-    b.vector = {"y1": 1.0, "y2": 1.0, "y3": 1.0}
-    c.vector = {"x1": 1.0, "x2": 1.0, "x3": 1.0, "y1": 1.0, "y2": 1.0, "y3": 1.0}
-    merged = merge_stories(topics(a, b, c), threshold=0.5)
-    assert [(t.name, len(t.articles)) for t in merged] == [("a", 3)]
+def test_vetoed_pair_can_merge_once_its_cluster_shares_enough_terms():
+    sim = np.array([[1.0, 0.9, 0.85], [0.9, 1.0, 0.85], [0.85, 0.85, 1.0]])
+    terms = [{"a", "b", "e"}, {"c", "f", "g"}, {"a", "b", "c", "e", "f", "g"}]
+    result = average_linkage(sim, terms, 0.8)
+    assert result.clusters == [[0, 1, 2]]
+    assert [(left, right) for left, right, _, _ in result.vetoes] == [([0], [1])]
 
 
-def test_shared_link_merges_llm_groups():
-    first = article("Same link, different feed", source="d", url="https://x.example/story?utm_source=rss")
-    second = article("Unrelated wording entirely", source="e", url="https://www.x.example/story/")
-    llm = FakeLLM({"topics": [{"name": "One", "items": [0]}, {"name": "Two", "items": [1]}]})
-    merged = asyncio.run(group_articles(weighed(first, second), GroupingConfig(method="llm"), llm))
-    assert [(t.name, len(t.articles)) for t in merged] == [("One", 2)]
-
-
-def test_story_split_by_keyword_rule_is_merged():
-    # The rule claims both "Qeshm" headlines; the merge still keeps the live blog separate.
+def test_keyword_rules_seed_a_story_that_clustering_can_grow():
+    # The rule claims only the WSJ headline (the BBC one doesn't say "Qeshm"); similarity adds BBC.
     config = GroupingConfig(topics=[TopicRule(name="Iran strikes", keywords=["qeshm"])])
-    merged = asyncio.run(group_articles(weighed(STRIKE_WSJ, STRIKE_BBC, LIVE_BLOG), config, None))
-    assert sorted((t.name, len(t.articles)) for t in merged) == [("Iran strikes", 2), (LIVE_BLOG.title, 1)]
+    stories = group_articles(weighed(STRIKE_WSJ, STRIKE_BBC, LIVE_BLOG), config)
+    assert sorted((t.name, len(t.articles)) for t in stories) == [("Iran strikes", 2), (LIVE_BLOG.title, 1)]
 
 
-def test_merge_logs_reason_and_sources(caplog):
+def test_stories_are_named_after_and_written_from_their_most_central_articles():
+    sim = np.array([[1.0, 0.2, 0.3], [0.2, 1.0, 0.9], [0.3, 0.9, 1.0]])
+    assert central_order([0, 1, 2], sim) == [2, 1, 0]
+    (story,) = group_articles(weighed(STRIKE_BBC, STRIKE_WSJ), GroupingConfig(central_articles=1))
+    assert story.name == story.articles[0].title and story.central == story.articles[:1]
+
+
+def test_llm_writes_from_central_articles_but_entry_lists_top_sources(fake_llm):
+    top = [article("Top scored", source="a"), article("Second", source="b")]
+    topic = Topic(name="Story", articles=top, central=[top[1]])
+    entry = asyncio.run(summarize_topic(topic, top, fake_llm))
+    assert "Second" in fake_llm.calls[0] and "Top scored" not in fake_llm.calls[0]
+    assert [s.title for s in entry.sources] == ["Top scored", "Second"]
+
+
+def test_cluster_logs_joins_stories_and_summary(caplog):
     with caplog.at_level(logging.INFO, logger="app.pipeline.grouping"):
-        merge_stories(topics(*weighed(STRIKE_BBC, STRIKE_WSJ)), threshold=0.2)
-    reason, summary = caplog.messages
-    assert reason.startswith(f'Merge: "{STRIKE_WSJ.title}" into "{STRIKE_BBC.title}": similar coverage (tf-idf cosine ')
-    assert "qeshm" in reason
-    assert reason.endswith(f'"{STRIKE_WSJ.title}" (WSJ) ~ "{STRIKE_BBC.title}" (BBC)')
-    assert summary == "Merge (tf-idf): 2 topics -> 1 stories"
+        group_articles(weighed(STRIKE_BBC, STRIKE_WSJ, LIVE_BLOG), GroupingConfig())
+    join, story, summary = caplog.messages
+    assert join.startswith(f'Cluster: joined "{STRIKE_BBC.title}" + "{STRIKE_WSJ.title}": average cosine ')
+    assert story.startswith('Story "') and "(2 articles, cohesion " in story and "[WSJ]" in story
+    assert summary.startswith(
+        "Cluster (tf-idf, average linkage, threshold 0.20): 3 articles -> 2 stories "
+        "(1 with more than one article, largest 2; 0 keyword rules matched; 0 vetoed merges) in "
+    )
+
+
+def test_cluster_logs_near_misses_at_debug(caplog):
+    a, b = article("A", source="a"), article("B", source="b")
+    a.vector, b.vector = {"x": 0.6, "y": 0.8, "z": 0.0}, {"x": 0.8, "y": 0.6, "z": 0.0}  # cosine 0.96
+    with caplog.at_level(logging.DEBUG, logger="app.pipeline.grouping"):
+        group_articles([a, b], GroupingConfig(tfidf_threshold=1.0))
+    assert 'Cluster: near miss 0.96 < 1.00: "A" ~ "B"' in caplog.messages
+
+
+def test_cluster_records_metrics():
+    runs = metrics.CLUSTER_RUNS.labels("tf-idf")._value.get()
+    group_articles(weighed(STRIKE_BBC, STRIKE_WSJ, LIVE_BLOG), GroupingConfig())
+    assert metrics.CLUSTER_RUNS.labels("tf-idf")._value.get() == runs + 1
+    assert metrics.CLUSTER_STORIES.labels("multi")._value.get() == 1
+    assert metrics.CLUSTER_STORIES.labels("single")._value.get() == 1
 
 
 def test_comparison_keys_never_change_what_the_report_shows():
@@ -153,6 +173,7 @@ def test_report_has_one_entry_per_story_with_original_headlines():
 def test_embed_articles_attaches_unit_vectors_in_batches_and_logs(caplog):
     articles = [article(f"Story {i}", source=f"s{i}", summary="body") for i in range(5)]
     llm = FakeLLM(embed=lambda text: [3.0, 4.0])
+    runs = metrics.EMBED_RUNS.labels("success")._value.get()
     with caplog.at_level(logging.INFO, logger="app.pipeline.preprocess"):
         asyncio.run(embed_articles(articles, llm, EmbeddingConfig(model="m", batch_size=2)))
     assert [len(batch) for batch in llm.embed_calls] == [2, 2, 1]
@@ -161,14 +182,18 @@ def test_embed_articles_attaches_unit_vectors_in_batches_and_logs(caplog):
     (line,) = caplog.messages
     assert line.startswith("Embed: 5 documents -> 5 embeddings (1 per document, 2 dimensions, 35 tokens) with m in ")
     assert line.endswith("per document, 3 request(s))")
+    assert metrics.EMBED_RUNS.labels("success")._value.get() == runs + 1
+    assert metrics.EMBED_DOCUMENTS._value.get() == 5 and metrics.EMBED_TOKENS._value.get() == 35
 
 
 def test_embedding_failure_leaves_tfidf_in_charge(caplog):
     articles = [article("Story", source="s", summary="body")]
+    failures = metrics.EMBED_RUNS.labels("failure")._value.get()
     with caplog.at_level(logging.WARNING, logger="app.pipeline.preprocess"):
         asyncio.run(embed_articles(articles, FakeLLM(), EmbeddingConfig(model="m")))
     assert articles[0].embedding is None
-    assert "merging on TF-IDF only" in caplog.messages[0]
+    assert "clustering on TF-IDF only" in caplog.messages[0]
+    assert metrics.EMBED_RUNS.labels("failure")._value.get() == failures + 1
 
 
 def _pair(tfidf_alike: bool, embedding_alike: bool):
@@ -176,17 +201,23 @@ def _pair(tfidf_alike: bool, embedding_alike: bool):
     shared = {"x1": 1.0, "x2": 1.0, "x3": 1.0}
     a.vector = {**shared} if tfidf_alike else {**shared, **{f"a{i}": 3.0 for i in range(9)}}
     b.vector = {**shared} if tfidf_alike else {**shared, **{f"b{i}": 3.0 for i in range(9)}}
-    a.embedding, b.embedding = [1.0, 0.0], ([1.0, 0.1] if embedding_alike else [0.0, 1.0])
+    for x in (a, b):
+        norm = sum(v * v for v in x.vector.values()) ** 0.5
+        x.vector = {w: v / norm for w, v in x.vector.items()}
+    a.embedding, b.embedding = [1.0, 0.0], ([0.995, 0.0998] if embedding_alike else [0.0, 1.0])
     return a, b
 
 
+EMBEDDED = {"embeddings": EmbeddingConfig(model="m", threshold=0.8), "tfidf_threshold": 0.2}
+
+
 def test_embeddings_decide_similarity_when_every_article_has_one():
-    assert len(merge_stories(topics(*_pair(tfidf_alike=False, embedding_alike=True)), 0.2, 0.8)) == 1
-    assert len(merge_stories(topics(*_pair(tfidf_alike=True, embedding_alike=False)), 0.2, 0.8)) == 2
+    assert sizes(*_pair(tfidf_alike=False, embedding_alike=True), **EMBEDDED) == [2]
+    assert sizes(*_pair(tfidf_alike=True, embedding_alike=False), **EMBEDDED) == [1, 1]
 
 
 def test_tfidf_decides_when_embeddings_are_missing_or_disabled():
     a, b = _pair(tfidf_alike=True, embedding_alike=False)
-    assert len(merge_stories(topics(a, b), 0.2, None)) == 1  # embeddings not configured
+    assert sizes(a, b, tfidf_threshold=0.2) == [2]  # embeddings not configured
     b.embedding = None
-    assert len(merge_stories(topics(a, b), 0.2, 0.8)) == 1  # one side has none
+    assert sizes(a, b, **EMBEDDED) == [2]  # one article has none

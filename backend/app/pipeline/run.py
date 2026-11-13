@@ -1,6 +1,6 @@
 """End-to-end report generation in two phases.
 
-1. Build the context: collect -> preprocess -> group (+ merge stories) -> score -> select.
+1. Build the context: collect -> preprocess -> embed -> cluster into stories -> score -> select.
 2. Generate the form: the LLM writes a tagline and summary for each selected story.
 """
 
@@ -42,6 +42,8 @@ async def collect(connectors: list[Connector]) -> list[list[Article]]:
             continue
         metrics.SOURCE_FETCHES.labels(connector.source.id, "success").inc()
         metrics.SOURCE_ITEMS.labels(connector.source.id).set(len(result))
+        log.debug("Collect: %s: %d items: %s", connector.source.id, len(result),
+                  "; ".join(f'"{a.title}"' for a in result))
         per_source.append(result)
     log.info(
         "Collect: %d items from %d of %d sources%s",
@@ -56,7 +58,7 @@ async def build_context(
 ) -> list[Story]:
     articles = preprocess(await collect(connectors), config.pipeline, now)
     await embed_articles(articles, llm, config.grouping.embeddings)
-    topics = await group_articles(articles, config.grouping, llm)
+    topics = group_articles(articles, config.grouping)
     ranked = score_topics(topics, config.scoring, now)
     return select_topics(ranked, config.report)
 

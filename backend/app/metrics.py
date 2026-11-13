@@ -40,6 +40,26 @@ LLM_DURATION = Histogram(
     "news_llm_request_duration_seconds", "LLM API request latency", ["operation"],
     buckets=(0.1, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
 )
+EMBED_RUNS = Counter(
+    "news_embedding_runs", "Embedding steps by outcome (failure: clustering fell back to TF-IDF)", ["outcome"]
+)
+EMBED_DURATION = Histogram(
+    "news_embedding_duration_seconds", "Wall time to embed one generation's articles",
+    buckets=(0.5, 1, 2.5, 5, 10, 30, 60, 120, 300),
+)
+EMBED_DOCUMENTS = Gauge("news_embedding_documents", "Articles embedded in the last generation")
+EMBED_TOKENS = Gauge("news_embedding_tokens", "Prompt tokens the embedding server reported in the last generation")
+CLUSTER_RUNS = Counter("news_cluster_runs", "Clustering runs by vector kind", ["vectors"])
+CLUSTER_DURATION = Histogram(
+    "news_cluster_duration_seconds", "Wall time to cluster one generation's articles", ["vectors"],
+    buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10),
+)
+CLUSTER_STORIES = Gauge("news_cluster_stories", "Stories from the last clustering, by size", ["size"])
+CLUSTER_VETOES = Gauge("news_cluster_vetoes", "Merges vetoed for too few shared terms in the last clustering")
+CLUSTER_COHESION = Histogram(
+    "news_cluster_cohesion", "Average pairwise cosine within each multi-article story", ["vectors"],
+    buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0),
+)
 
 
 @contextmanager
