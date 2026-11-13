@@ -175,9 +175,9 @@ def test_embed_articles_attaches_unit_vectors_in_batches_and_logs(caplog):
     llm = FakeLLM(embed=lambda text: [3.0, 4.0])
     runs = metrics.EMBED_RUNS.labels("success")._value.get()
     with caplog.at_level(logging.INFO, logger="app.pipeline.preprocess"):
-        asyncio.run(embed_articles(articles, llm, EmbeddingConfig(model="m", batch_size=2)))
+        asyncio.run(embed_articles(articles, llm, EmbeddingConfig(model="m", batch_size=2, prefix="clustering: ")))
     assert [len(batch) for batch in llm.embed_calls] == [2, 2, 1]
-    assert llm.embed_calls[0][0] == "Story 0\nbody"
+    assert llm.embed_calls[0][0] == "clustering: Story 0\nbody"
     assert all(a.embedding == [0.6, 0.8] for a in articles)
     (line,) = caplog.messages
     assert line.startswith("Embed: 5 documents -> 5 embeddings (1 per document, 2 dimensions, 35 tokens) with m in ")

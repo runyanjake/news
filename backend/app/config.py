@@ -26,6 +26,7 @@ class EmbeddingConfig(BaseModel):
     model: str  # served at EMBEDDING_BASE_URL (default: the LLM server)
     threshold: float = 0.8  # average embedding cosine at which two clusters are one story
     batch_size: int = 64
+    prefix: str = ""  # task instruction some models expect, e.g. nomic-embed-text's "clustering: "
 
 
 class GroupingConfig(BaseModel):

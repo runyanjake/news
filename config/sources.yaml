@@ -151,6 +151,7 @@ grouping:
   # Stories are average-linkage clusters of article vectors (see backend/app/pipeline/grouping.py).
   embeddings:                # embed title + RSS description at EMBEDDING_BASE_URL (default: the LLM server)
     model: nomic-embed-text
+    prefix: "clustering: "   # nomic-embed-text v1.5 task prefix for grouping similar texts
     threshold: 0.8           # average embedding cosine at which two clusters are one story
   tfidf_threshold: 0.2       # the same on TF-IDF word vectors, used if embedding fails
   central_articles: 4        # a story's most central articles, which the LLM writes its headline from
