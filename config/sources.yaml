@@ -1,4 +1,5 @@
 # Sources and pipeline tuning. `type` names a connector in backend/app/connectors/; "${NAME}" values come from .env.
+# `url` is the feed; optional `homepage` is the publisher's site, linked from the /sources/ page.
 
 sources:
   # World
@@ -6,30 +7,35 @@ sources:
     name: The Guardian World
     type: rss
     url: https://www.theguardian.com/world/rss
+    homepage: https://www.theguardian.com/world
     reputation: 0.85
     tags: [world]
   - id: aljazeera
     name: Al Jazeera
     type: rss
     url: https://www.aljazeera.com/xml/rss/all.xml
+    homepage: https://www.aljazeera.com/
     reputation: 0.8
     tags: [world]
   - id: bbc-world
     name: BBC World
     type: rss
     url: https://feeds.bbci.co.uk/news/world/rss.xml
+    homepage: https://www.bbc.com/news/world
     reputation: 0.85
     tags: [world]
   - id: npr-news
     name: NPR News
     type: rss
     url: https://feeds.npr.org/1001/rss.xml
+    homepage: https://www.npr.org/
     reputation: 0.8
     tags: [world]
   - id: wsj-world
     name: The Wall Street Journal
     type: rss
     url: https://feeds.content.dowjones.io/public/rss/RSSWorldNews
+    homepage: https://www.wsj.com/
     reputation: 0.85
     tags: [world, business]
 
@@ -38,36 +44,42 @@ sources:
     name: Ars Technica
     type: rss
     url: https://feeds.arstechnica.com/arstechnica/index
+    homepage: https://arstechnica.com/
     reputation: 0.75
     tags: [technology]
   - id: the-verge
     name: The Verge
     type: rss
     url: https://www.theverge.com/rss/index.xml
+    homepage: https://www.theverge.com/
     reputation: 0.7
     tags: [technology]
   - id: hn-front
     name: Hacker News
     type: rss
     url: https://news.ycombinator.com/rss
+    homepage: https://news.ycombinator.com/
     reputation: 0.6
     tags: [technology, engineering]
   - id: infoworld
     name: InfoWorld
     type: rss
     url: https://www.infoworld.com/feed
+    homepage: https://www.infoworld.com/
     reputation: 0.65
     tags: [technology, engineering]
   - id: techxplore
     name: TechXplore
     type: rss
     url: https://techxplore.com/rss-feed/
+    homepage: https://techxplore.com/
     reputation: 0.6
     tags: [technology, engineering]
   - id: github-blog
     name: GitHub Blog
     type: rss
     url: https://github.blog/feed/
+    homepage: https://github.blog/
     reputation: 0.6
     tags: [engineering]
 
@@ -76,24 +88,28 @@ sources:
     name: Bloomberg
     type: rss
     url: https://feeds.bloomberg.com/markets/news.rss
+    homepage: https://www.bloomberg.com/markets
     reputation: 0.85
     tags: [business, markets]
   - id: ft-home
     name: Financial Times
     type: rss
     url: https://www.ft.com/rss/home/uk
+    homepage: https://www.ft.com/
     reputation: 0.85
     tags: [business, economy]
   - id: forbes-business
     name: Forbes
     type: rss
     url: https://www.forbes.com/business/feed/
+    homepage: https://www.forbes.com/business/
     reputation: 0.65
     tags: [business]
   - id: hbr
     name: Harvard Business Review
     type: rss
     url: http://feeds.hbr.org/harvardbusiness
+    homepage: https://hbr.org/
     reputation: 0.7
     tags: [business, management]
 
@@ -102,24 +118,28 @@ sources:
     name: TechCrunch
     type: rss
     url: https://techcrunch.com/feed/
+    homepage: https://techcrunch.com/
     reputation: 0.7
     tags: [startups, technology]
   - id: venturebeat
     name: VentureBeat
     type: rss
     url: https://venturebeat.com/feed/
+    homepage: https://venturebeat.com/
     reputation: 0.65
     tags: [startups, technology]
   - id: a16z
     name: Andreessen Horowitz
     type: rss
     url: https://www.a16z.news/feed
+    homepage: https://a16z.com/
     reputation: 0.55
     tags: [startups, venture-capital]
   - id: saastr
     name: SaaStr
     type: rss
     url: https://www.saastr.com/feed/
+    homepage: https://www.saastr.com/
     reputation: 0.5
     tags: [startups]
 
@@ -128,18 +148,21 @@ sources:
     name: MIT Technology Review
     type: rss
     url: https://www.technologyreview.com/feed/
+    homepage: https://www.technologyreview.com/
     reputation: 0.8
     tags: [science, technology]
   - id: quanta
     name: Quanta Magazine
     type: rss
     url: https://www.quantamagazine.org/feed/
+    homepage: https://www.quantamagazine.org/
     reputation: 0.8
     tags: [science]
   - id: nature-news
     name: Nature
     type: rss
     url: https://www.nature.com/nature.rss
+    homepage: https://www.nature.com/
     reputation: 0.9
     tags: [science]
 
