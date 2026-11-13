@@ -48,3 +48,35 @@ def test_rss_parse_normalises_entries():
     assert first.published_at.isoformat() == "2026-10-22T12:00:00+00:00"
     assert (first.source_id, first.source_name, first.reputation) == ("x", "X News", 0.7)
     assert articles[1].published_at is None
+
+
+IMAGE_FEED = """<?xml version="1.0"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/"><channel><title>T</title>
+<item><title>Media sizes</title><link>https://x.example/1</link>
+  <media:content url="https://img.example/small.jpg" width="140"/>
+  <media:content url="https://img.example/large.jpg" width="460"/>
+  <media:content url="https://img.example/clip.mp4" medium="video" width="1280"/></item>
+<item><title>Thumbnail</title><link>https://x.example/2</link>
+  <media:thumbnail url="https://img.example/thumb.jpg"/></item>
+<item><title>Enclosure</title><link>https://x.example/3</link>
+  <enclosure url="https://img.example/enc.png" type="image/png" length="1"/></item>
+<item><title>Inline</title><link>https://x.example/4</link>
+  <description>&lt;img src="https://img.example/inline.jpg?a=1&amp;amp;b=2"&gt; Text.</description></item>
+<item><title>Unsafe</title><link>https://x.example/5</link>
+  <media:thumbnail url="javascript:alert(1)"/></item>
+<item><title>None</title><link>https://x.example/6</link><description>Just text.</description></item>
+</channel></rss>"""
+
+
+def test_rss_parse_picks_an_image_per_entry():
+    source = SourceConfig(id="x", name="X News", type="rss", url="https://x.example/rss")
+    images = {a.title: a.image_url for a in RSSConnector(source).parse(IMAGE_FEED)}
+
+    assert images == {
+        "Media sizes": "https://img.example/large.jpg",
+        "Thumbnail": "https://img.example/thumb.jpg",
+        "Enclosure": "https://img.example/enc.png",
+        "Inline": "https://img.example/inline.jpg?a=1&b=2",
+        "Unsafe": None,
+        "None": None,
+    }

@@ -12,6 +12,7 @@ from ..models import Article
 from .base import Connector, register
 
 _TAG = re.compile(r"<[^>]+>")
+_IMG_SRC = re.compile(r"""<img\b[^>]*?\bsrc=["']([^"']+)["']""", re.IGNORECASE)
 
 
 def _clean(text: str) -> str:
@@ -25,6 +26,31 @@ def _published(entry) -> datetime | None:
     if not parsed:
         return None
     return datetime.fromtimestamp(calendar.timegm(parsed), tz=UTC)
+
+
+def _is_image(media: dict) -> bool:
+    # Untyped media:content is almost always an image; video/audio say so via medium or type.
+    medium, mime = media.get("medium", ""), media.get("type", "")
+    return medium == "image" or mime.startswith("image/") or not (medium or mime)
+
+
+def _width(media: dict) -> int:
+    try:
+        return int(media.get("width") or 0)
+    except ValueError:
+        return 0
+
+
+def _image(entry) -> str | None:
+    """Best image for an entry: the widest media:content, then a thumbnail, an image enclosure,
+    or the first <img> in the item's HTML. Only absolute http(s) URLs are kept."""
+    media = sorted((m for m in entry.get("media_content", []) if _is_image(m)), key=_width, reverse=True)
+    candidates = [m.get("url") for m in media]
+    candidates += [t.get("url") for t in entry.get("media_thumbnail", [])]
+    candidates += [e.get("href") for e in entry.get("enclosures", []) if e.get("type", "").startswith("image/")]
+    for markup in [entry.get("summary", "")] + [c.get("value", "") for c in entry.get("content", [])]:
+        candidates += [html.unescape(src) for src in _IMG_SRC.findall(markup or "")]
+    return next((u.strip() for u in candidates if u and re.match(r"https?://", u.strip(), re.I)), None)
 
 
 @register("rss")
@@ -47,6 +73,7 @@ class RSSConnector(Connector):
                     url=link,
                     summary=_clean(entry.get("summary", ""))[:1000],
                     published_at=_published(entry),
+                    image_url=_image(entry),
                 )
             )
         return articles

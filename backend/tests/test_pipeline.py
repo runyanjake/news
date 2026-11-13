@@ -99,6 +99,16 @@ def test_report_falls_back_to_top_source_without_llm():
     assert (entry.tagline, entry.summary, entry.ai_generated) == ("Lone headline", "Body.", False)
 
 
+def test_entry_sources_carry_their_images(fake_llm):
+    pictured = article("Budget bill clears Senate", source="b").model_copy(update={"image_url": "https://img.example/b.jpg"})
+    connectors = [StaticConnector("a", [article("Senate passes budget bill", source="a")]),
+                  StaticConnector("b", [pictured])]
+    report = asyncio.run(generate_report(_config(), fake_llm, "2026-10-22", connectors, NOW))
+    images = {s.name: s.image_url for s in report.entries[0].sources}
+    assert images == {"A": None, "B": "https://img.example/b.jpg"}
+    assert '"image_url":"https://img.example/b.jpg"' in report.model_dump_json()
+
+
 def test_min_sources_filters_thin_topics(fake_llm):
     connectors = [StaticConnector("a", [article("Lone headline", source="a")])]
     report = asyncio.run(

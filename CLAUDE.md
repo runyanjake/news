@@ -13,6 +13,7 @@ See README.md for architecture and commands.
 - New source types: add a `Connector` subclass with `@register("<type>")` and import it in `connectors/__init__.py`. Don't special-case source types in the pipeline.
 - The pipeline must still produce a report when the LLM is unreachable (fallback to the top source).
 - The Report JSON shape (`backend/app/models.py` `Report`) is the contract between the backend and the renderer. Keep changes backward compatible, because old reports are re-rendered by `npm run rebuild`.
+- Images: connectors set `Article.image_url` (absolute http(s) only); it travels on `SourceRef.image_url` and the renderer shows the first source's image. Images are hot-linked, not stored; the privacy policy says so.
 - The frontend has no npm dependencies; keep it that way unless clearly needed.
 - Fonts: only self-hosted, freely licensed (SIL OFL) files in `frontend/src/report-format/assets/` (copied to `/assets/` by `publishSite`), with generic `serif`/`sans-serif` fallbacks. Don't name proprietary fonts (Georgia, Times, Courier, Arial...) in CSS; a test enforces this.
 - Metrics: define them in `backend/app/metrics.py` with a `news_` prefix and keep label values bounded (source ids, outcomes; never URLs or headlines). Document new ones in the README Metrics table. `/metrics` stays off the nginx config.
@@ -20,7 +21,7 @@ See README.md for architecture and commands.
 - Story scores and selection cutoffs assume each story signal stays in 0..1. Keep new signals in that range, and recheck `report.cutoff_*` in `config/sources.yaml` when you change `scoring.story`.
 
 ## Checks
-- `cd backend && ../.venv/bin/python -m pytest` (venv: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt`)
+- `cd backend && ../.venv/bin/python -m pytest` (Python >= 3.11; venv: `python3 -m venv .venv && .venv/bin/pip install -r backend/requirements-dev.txt`)
 - Changes to merging/similarity: `cd backend && ../.venv/bin/python -m tests.merge_eval eval tests/data/merge/<day>.json`, and raise `BASELINE` in `tests/test_merge_eval.py` when results improve. Test data lives in `backend/tests/data/`.
 - `cd frontend && npm test` (Node >= 20)
 - CI: `Jenkinsfile` runs the same checks in containers (plus `ruff check --select E9,F` on the backend). If you add env vars to `.env.example`, add them to the Jenkinsfile `environment {}` block and its `.env` writer too.

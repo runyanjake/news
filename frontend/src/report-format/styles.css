@@ -23,6 +23,10 @@ a:visited { color: var(--visited); }
 .entry { border-bottom: 1px solid var(--rule); padding-bottom: .8rem; margin-bottom: .8rem; }
 .entry .tagline { font-weight: bold; font-size: 1.1rem; text-transform: uppercase; }
 .entry p { margin: .4rem 0; }
+.image { display: block; }
+.image img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: var(--rule); }
+.entry .image { margin-bottom: .4rem; }
+.lead .image { max-width: 760px; margin: 0 auto 1rem; }
 .sources { font-size: .8rem; color: var(--muted); padding-left: 1rem; margin: .3rem 0; }
 .sources a { color: var(--muted); }
 .lead .sources { display: inline-block; text-align: left; max-width: 760px; margin: .3rem auto; }

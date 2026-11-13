@@ -58,6 +58,26 @@ describe('report format', () => {
     assert.ok(!html.includes('javascript:'));
   });
 
+  it('shows the first contributing story image, linked to that story', () => {
+    const pictured = {
+      ...entry('Pictured story'),
+      sources: [
+        { name: 'A', title: 'a', url: 'https://a.example/1', score: 1 },
+        { name: 'B', title: 'b', url: 'https://b.example/1', score: 1, image_url: 'https://img.example/b.jpg?x=1&y=2' },
+      ],
+    };
+    const html = renderReport(report('2026-10-22', [pictured, entry('Plain story')]));
+    assert.match(html, /class="lead"[\s\S]*<a class="image" href="https:\/\/b\.example\/1"[^>]*><img src="https:\/\/img\.example\/b\.jpg\?x=1&amp;y=2"/);
+    assert.equal(html.match(/<img /g).length, 1); // no image source, no image (also old reports)
+  });
+
+  it('never renders non-http images', () => {
+    const unsafe = { ...entry('Story'), sources: [{ name: 'A', title: 'a', url: 'https://a.example', score: 1, image_url: 'javascript:alert(1)' }] };
+    const html = renderReport(report('2026-10-22', [unsafe]));
+    assert.ok(!html.includes('<img '));
+    assert.ok(!html.includes('javascript:'));
+  });
+
   it('handles an empty report', () => {
     assert.match(renderReport(report('2026-10-22', [])), /No stories/);
   });

@@ -27,6 +27,7 @@ class Article(BaseModel):
     url: str
     summary: str = ""
     published_at: datetime | None = None
+    image_url: str | None = None
     reputation: float = 0.5
     tags: list[str] = Field(default_factory=list)
     score: float = 0.0
@@ -51,6 +52,7 @@ class SourceRef(BaseModel):
     title: str
     url: str
     score: float
+    image_url: str | None = None  # absent in reports stored before images were collected
 
 
 class ReportEntry(BaseModel):

@@ -53,9 +53,18 @@ function sourceList(sources) {
   return `<ul class="sources">${items}</ul>`;
 }
 
+/** The first contributing story's image, linked to that story; hidden if it fails to load. */
+function imageHtml(sources) {
+  const source = sources.find((s) => /^https?:\/\//i.test(String(s.image_url ?? '')));
+  if (!source) return '';
+  return `<a class="image" href="${safeUrl(source.url)}" rel="noopener"><img src="${safeUrl(source.image_url)}" alt="" \
+loading="lazy" referrerpolicy="no-referrer" onerror="this.parentNode.remove()"></a>`;
+}
+
 function entryHtml(entry, cssClass) {
   const href = safeUrl(entry.sources[0]?.url);
   return `<article class="${cssClass}">
+${imageHtml(entry.sources)}
 <a class="tagline" href="${href}" rel="noopener">${escape(entry.tagline)}</a>
 <p>${escape(entry.summary)}</p>
 ${sourceList(entry.sources)}
@@ -110,7 +119,8 @@ ${updated()}
 <p>${name} may collect visitor data, such as IP address, browser user agent, requested page and time of visit,
 as part of standard server logging for troubleshooting and site metrics. This data is not sold to advertisers.
 There are no accounts or advertising; your font and light/dark choices are stored only in your own browser.
-Links to sources lead to the publishers' websites, which have their own privacy policies.</p>
+Story images are loaded directly from the publishers' servers, which can see your IP address and browser like any
+website you visit. Links to sources lead to the publishers' websites, which have their own privacy policies.</p>
 </article>`);
 }
 

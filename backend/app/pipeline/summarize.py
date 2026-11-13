@@ -37,5 +37,8 @@ async def summarize_topic(topic: Topic, top: list[Article], llm: LLMClient | Non
         summary=summary,
         score=topic.score,
         ai_generated=ai,
-        sources=[SourceRef(name=a.source_name, title=a.title, url=a.url, score=a.score) for a in top],
+        sources=[
+            SourceRef(name=a.source_name, title=a.title, url=a.url, score=a.score, image_url=a.image_url)
+            for a in top
+        ],
     )
