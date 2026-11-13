@@ -12,12 +12,12 @@ pipeline {
         TZ                   = 'America/Los_Angeles'
         RENDER_TIME          = '08:00'
         NEWS_HOST            = 'news.whitney.rip'
-        LLM_BASE_URL         = 'http://llm-server:8080/v1'
         LLM_MODEL            = 'llama3.1'
         LLM_TIMEOUT_SECONDS  = '120'
-        EMBEDDING_BASE_URL   = ''  // empty: LLM_BASE_URL (Jenkins leaves empty values unset)
         DOCKER_BUILDKIT      = '1'
 
+        LLM_BASE_URL         = credentials('pws-llm-server-base-url')
+        EMBEDDING_BASE_URL   = credentials('pws-embed-server-base-url')
         ADMIN_TOKEN          = credentials('news-admin-token')
         LLM_API_KEY          = credentials('llama_cpp-llm-api-key')
         DISCORD_WEBHOOK      = credentials('discord-pws-builds-channel-webhook')
