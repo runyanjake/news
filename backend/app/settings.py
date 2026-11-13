@@ -16,6 +16,7 @@ class Settings:
     llm_api_key: str
     llm_timeout: float
     admin_token: str
+    embedding_base_url: str = ""  # empty: the LLM server
 
 
 def load_settings() -> Settings:
@@ -28,4 +29,5 @@ def load_settings() -> Settings:
         llm_api_key=env("LLM_API_KEY", ""),
         llm_timeout=float(env("LLM_TIMEOUT_SECONDS", "120")),
         admin_token=env("ADMIN_TOKEN", ""),
+        embedding_base_url=env("EMBEDDING_BASE_URL", "").rstrip("/"),
     )

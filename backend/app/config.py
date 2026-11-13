@@ -23,16 +23,15 @@ class PipelineConfig(BaseModel):
 
 
 class EmbeddingConfig(BaseModel):
-    model: str  # served by the same OpenAI-compatible server as the LLM
-    merge_threshold: float = 0.8  # embedding cosine; calibrate with tests/merge_eval.py
+    model: str  # served at EMBEDDING_BASE_URL (default: the LLM server)
+    threshold: float = 0.8  # average embedding cosine at which two clusters are one story
     batch_size: int = 64
 
 
 class GroupingConfig(BaseModel):
-    method: str = "keywords"
-    similarity_threshold: float = 0.25
-    merge_threshold: float = 0.2
-    embeddings: EmbeddingConfig | None = None  # None: merge on TF-IDF alone
+    tfidf_threshold: float = 0.2  # average TF-IDF cosine, used when embeddings are off or fail
+    embeddings: EmbeddingConfig | None = None
+    central_articles: int = 4  # most central articles of a story the LLM writes its headline from
     topics: list[TopicRule] = Field(default_factory=list)
 
 

@@ -7,7 +7,7 @@ A news aggregator inspired by https://news.dws.rip, offering a periodically rend
 flowchart LR
   cfg[config/sources.yaml] --> be
   subgraph be[backend · Python/FastAPI]
-    c[connectors] --> p[preprocess] --> g[group + merge stories] --> s[score stories] --> sel[select 10–20] --> l[LLM tagline + summary]
+    c[connectors] --> p[preprocess] --> g[embed + cluster stories] --> s[score stories] --> sel[select 10–20] --> l[LLM tagline + summary]
   end
   be -- report JSON history --> data1[(data/reports)]
   r[renderer · Node] -- 08:00 daily: generate + poll --> be
@@ -19,10 +19,10 @@ Steps 1–5 build the context (`build_context` in `backend/app/pipeline/run.py`)
 
 1. **Collect**: every source in `config/sources.yaml` is fetched by a connector (`backend/app/connectors/`). RSS ships today. Other source types (Twitter/X, JSON APIs) subclass `Connector` and register a new `type`.
 2. **Preprocess**: drops stale items, caps items per source, and keeps one copy of each article (by URL, ignoring tracking params; the most reputable feed's copy wins). It also annotates each article with the derived fields later stages share. This step only limits what goes into the context.
-3. **Group**: articles are bucketed into topics. The `keywords` method applies manual rules from the config, then title-similarity clustering. The `llm` method asks the LLM to cluster, and falls back to `keywords` if that fails. Topics that cover the same story are then merged, so each story is one report entry whose sources may come from several groups. Topics merge on a shared URL, or when their TF-IDF vectors (titles + summaries, with each feed's boilerplate removed) reach `grouping.merge_threshold`, share at least three distinctive words, and at least one pair of their articles also reaches the threshold on its own (so a broad topic can't absorb an article that only shares its theme). These comparison keys are derived fields; headlines, summaries and links pass to the report unchanged.
+3. **Cluster** (`backend/app/pipeline/grouping.py`): each article's title + RSS description (first 600 characters, so paywalls don't matter) is embedded once per run at `EMBEDDING_BASE_URL` (default: the LLM server) with `grouping.embeddings.model`; vectors live in memory for that run only. Stories are average-linkage clusters: every article starts alone and the two clusters with the highest average cosine merge until none reach `grouping.embeddings.threshold`. A merge is vetoed when the clusters share fewer than three distinctive TF-IDF words. If embedding fails, the same clustering runs on TF-IDF vectors (boilerplate removed) at `grouping.tfidf_threshold`, so a report still comes out. Keyword rules (`grouping.topics`) seed a cluster with every headline they match. Each story's `grouping.central_articles` most central articles (highest average cosine to the rest) are what the LLM later writes its headline and summary from. These comparison keys are derived fields; headlines, summaries and links pass to the report unchanged.
 4. **Score**: each article gets a weighted mix of source reputation, recency and relevance to its topic. Each story then gets a weighted mix (`scoring.story.weights`) of three signals, each 0..1, so a score means the same thing every day: *coverage* (how many outlets carry it, reputation-weighted, with diminishing returns: `coverage_half` weighted sources earn half the credit), *lead* (its best article's score) and *breadth* (how many sections' outlets cover it). With the shipped config a well-sourced single-outlet story scores about 0.4, two outlets about 0.5–0.55, three or more 0.6 and up.
 5. **Select** (`backend/app/pipeline/selection.py`): between `report.min_entries` and `max_entries` stories. A story's section is the most common first tag of its sources. First each section's best story gets in, so every section is covered (`cover_sections`). The rest fill by score, at most `max_entries_per_tag` per section. Past `min_entries`, each further story must clear a cutoff that rises linearly from `cutoff_start` to `cutoff_end` at `max_entries`, and selection stops at the first that falls short. A busy day gets a longer report and a quiet one a shorter one. The `Select:` log line gives the count, the section leads and the reason selection stopped; tune the weights and cutoffs against it.
-6. **Summarise**: the top N sources of each selected story go to the LLM, which returns a tagline and summary. Sources are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
+6. **Summarise**: the most central articles of each selected story go to the LLM, which returns a tagline and summary. The top N sources by score are listed on the entry. If the LLM is down, the entry falls back to the top source's headline.
 7. **Render**: the Node renderer turns the report into static HTML once a day at `RENDER_TIME` (local `TZ`). Every generation is kept, both as JSON (`generations/<date>/<stamp>.json` in the reports store) and as HTML under `/archive/<date>/<stamp>/`. The front page and `/reports/<date>/` always show the newest generation by `generated_at`. nginx serves the files with cache headers (pages that change are `no-cache`, so readers revalidate via ETag and see a new generation immediately) and proxies read-only `/api/` calls through a response cache.
 
 Report layout lives only in `frontend/src/report-format/`. After changing it, run `npm run rebuild` to re-render the whole history from the stored JSON.
@@ -51,18 +51,9 @@ set -a; . ./.env; set +a
 (cd frontend && npm run generate)  # writes data/site/
 ```
 
-### Tuning the merge step
+### Reading the clustering logs
 
-`backend/tests/data/merge/` holds labeled same-story pairs from real feeds (`<day>.labels.yaml`, written by hand) and the fixture built from them (`<day>.json`). `backend/tests/test_merge_eval.py` fails if the configured thresholds merge fewer same-story pairs or more different-story pairs than the recorded baseline. To compare thresholds or an embedding model:
-
-```sh
-cd backend
-../.venv/bin/python -m tests.merge_eval eval tests/data/merge/2026-11-03.json
-LLM_BASE_URL=http://localhost:11434/v1 ../.venv/bin/python -m tests.merge_eval eval tests/data/merge/2026-11-03.json --embeddings nomic-embed-text
-../.venv/bin/python -m tests.merge_eval snapshot <dir of saved <source id>.xml feeds> tests/data/merge/<day>.labels.yaml
-```
-
-`--embeddings` fetches the labeled articles' embeddings once and caches them in `tests/data/merge/embeddings/`, so the test suite can check a configured model offline. Tests only read `tests/data/`; nothing touches `data/`.
+Every generation logs each `Cluster: joined` merge and `Cluster: vetoed` merge with its average cosine, one `Story "..."` line per multi-article story listing its articles (most central first) and its cohesion, and a `Cluster (embedding|tf-idf, ...)` summary. At `DEBUG` it also logs each feed's headlines (`Collect: <source>: ...`), the closest unmerged pairs (`Cluster: near miss`) and the stories selection cut. Tune `grouping.embeddings.threshold` against those lines and the `news_cluster_cohesion` histogram.
 
 ### API
 
@@ -109,6 +100,15 @@ Grafana then reads the series from that Prometheus data source. Besides the defa
 | `news_source_items` | gauge, last generation | `source` |
 | `news_llm_requests_total` | counter | `operation` (`chat`/`embed`), `outcome` |
 | `news_llm_request_duration_seconds` | histogram | `operation` |
+| `news_embedding_runs_total` | counter | `outcome` (`success`/`failure`; failure means TF-IDF clustering) |
+| `news_embedding_duration_seconds` | histogram | |
+| `news_embedding_documents` | gauge, last generation | |
+| `news_embedding_tokens` | gauge, last generation | |
+| `news_cluster_runs_total` | counter | `vectors` (`embedding`/`tf-idf`) |
+| `news_cluster_duration_seconds` | histogram | `vectors` |
+| `news_cluster_stories` | gauge, last generation | `size` (`single`/`multi`) |
+| `news_cluster_vetoes` | gauge, last generation | |
+| `news_cluster_cohesion` | histogram, per multi-article story | `vectors` |
 
 Useful queries: `time() - news_generation_last_success_timestamp_seconds` (alert when it passes ~25h), `increase(news_source_fetches_total{outcome="failure"}[1d])`, `histogram_quantile(0.95, rate(news_llm_request_duration_seconds_bucket[1h]))`.
 
@@ -116,7 +116,7 @@ Useful queries: `time() - news_generation_last_success_timestamp_seconds` (alert
 
 `Jenkinsfile` builds and deploys the stack with `docker compose` on the Jenkins agent: checkout → preflight → build images → lint/tests (`Dockerfile.test`, on top of the built images) → teardown → deploy → health check → smoke test via nginx. It reports every build to Discord.
 
-Non-secret runtime settings (`TZ`, `NEWS_HOST`, `LLM_*`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
+Non-secret runtime settings (`TZ`, `NEWS_HOST`, `LLM_*`, `EMBEDDING_BASE_URL`) are set in the `environment {}` block. Each build writes `.env` from them. Jenkins credentials (Secret text) the job needs:
 
 | Credential ID | Used as |
 | --- | --- |

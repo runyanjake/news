@@ -87,4 +87,7 @@ def select_topics(ranked: list[Topic], config: ReportConfig) -> list[Story]:
     if skipped:
         notes.append(f"skipped {'; '.join(skipped)}")
     log.info("Select: %d of %d stories%s", len(chosen), len(ranked), f" ({'; '.join(notes)})" if notes else "")
+    cut = [f'"{topic.name}" ({topic.score:.2f})' for i, (topic, _, _) in enumerate(candidates) if i not in chosen]
+    if cut:
+        log.debug("Select: cut %d: %s", len(cut), "; ".join(cut))
     return [(topic, top) for i, (topic, top, _) in enumerate(candidates) if i in chosen]
