@@ -154,6 +154,8 @@ pipeline {
 
                     analytics=$(fetch /api/analytics) || fail "GET /api/analytics via nginx failed"
                     echo "$analytics" | grep -q '"total":' || fail "unexpected /api/analytics response: $analytics"
+                    docker compose exec -T nginx wget -qS -O /dev/null http://127.0.0.1/api/analytics 2>&1 | grep -qi 'X-Cache-Status' \
+                        && fail "/api/analytics is served from the nginx cache; visit counts would look stale"
 
                     echo "Smoke test passed"
                 '''

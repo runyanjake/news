@@ -77,7 +77,7 @@ Every generation logs each `Cluster: joined` merge and `Cluster: vetoed` merge w
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status; blocked at nginx |
 | POST | `/api/visits` | visit beacon; counts the client (`X-Real-IP` from nginx) at most once per day; returns 204 |
-| GET | `/api/analytics` | `{total, today, by_country}` views (`today` is null when Redis is down) |
+| GET | `/api/analytics` | `{total, today, by_country}` views (`today` is null when Redis is down); never cached, unlike the other `/api/` GETs |
 | GET | `/metrics` | Prometheus metrics; not proxied by nginx (see Metrics) |
 
 Generation and its status are blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):

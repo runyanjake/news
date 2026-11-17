@@ -43,6 +43,12 @@ def test_each_visitor_counts_once_per_day(client):
     assert client.get("/api/analytics").json() == {"total": 3, "today": 3, "by_country": {"GB": 1, "US": 1}}
 
 
+def test_analytics_is_never_cached(client):
+    assert client.get("/api/analytics").headers["cache-control"] == "no-store"
+    visit(client, "8.8.8.8")
+    assert client.get("/api/analytics").json()["total"] == 1
+
+
 def test_next_day_counts_again(client, monkeypatch):
     visit(client, "8.8.8.8")
     monkeypatch.setattr(main, "_today", lambda: "2099-01-01")
