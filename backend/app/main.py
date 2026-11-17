@@ -78,8 +78,9 @@ def create_app(
         return Response(status_code=204)
 
     @app.get("/api/analytics")
-    def analytics() -> dict:
+    def analytics(response: Response) -> dict:
         """Views since counting began (total, by ISO country code) and today's views; today is null without Redis."""
+        response.headers["Cache-Control"] = "no-store"  # live counts; a cached copy looks like visits aren't counted
         try:
             today = visitors.views(_today())
         except RedisError:
