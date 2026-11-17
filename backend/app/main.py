@@ -6,7 +6,8 @@ import secrets
 import time
 from datetime import datetime
 
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, Header, HTTPException, Request, Response
+from redis import Redis, RedisError
 
 from . import metrics
 from .config import load_config
@@ -16,12 +17,19 @@ from .models import Report
 from .pipeline import generate_report
 from .settings import Settings, load_settings
 from .storage import ReportStore
+from .visits import CountryLookup, DailyVisitors, ViewCounts
 
 configure_logging()
 log = logging.getLogger(__name__)
 
 
-def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -> FastAPI:
+def _today() -> str:
+    return datetime.now().astimezone().date().isoformat()
+
+
+def create_app(
+    settings: Settings | None = None, llm: LLMClient | None = None, redis: Redis | None = None
+) -> FastAPI:
     configure_logging()  # again: uvicorn configures its loggers after importing this module
     settings = settings or load_settings()
     store = ReportStore(settings.reports_dir)
@@ -29,6 +37,9 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         settings.llm_base_url, settings.llm_model, settings.llm_api_key, settings.llm_timeout,
         settings.embedding_base_url,
     )
+    view_counts = ViewCounts(settings.analytics_db)
+    visitors = DailyVisitors(redis or Redis.from_url(settings.redis_url, socket_timeout=2))
+    geo = CountryLookup(settings.geoip_db)
     app = FastAPI(title="PWS News")
 
     @app.get("/api/health")
@@ -50,6 +61,30 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
             for s in config.sources
             if s.enabled
         ]
+
+    @app.post("/api/visits", status_code=204)
+    def record_visit(request: Request, x_real_ip: str = Header(default="")) -> Response:
+        """Beacon sent by every page; counts each visitor at most once per local day."""
+        ip = x_real_ip or (request.client.host if request.client else "")
+        outcome = "repeat"
+        try:
+            if ip and visitors.first_today(ip, _today()):
+                view_counts.add(geo.country(ip))
+                outcome = "counted"
+        except RedisError as exc:  # can't tell repeat visits apart, so don't count rather than overcount
+            log.warning("Visit not counted, Redis unavailable: %s", exc)
+            outcome = "error"
+        metrics.VISITS.labels(outcome).inc()
+        return Response(status_code=204)
+
+    @app.get("/api/analytics")
+    def analytics() -> dict:
+        """Views since counting began (total, by ISO country code) and today's views; today is null without Redis."""
+        try:
+            today = visitors.views(_today())
+        except RedisError:
+            today = None
+        return {**view_counts.summary(), "today": today}
 
     @app.get("/api/reports")
     def list_reports() -> list[str]:
@@ -98,7 +133,7 @@ def create_app(settings: Settings | None = None, llm: LLMClient | None = None) -
         try:
             # Re-read config each run so source edits apply without a restart.
             config = load_config(settings.sources_file)
-            local_date = datetime.now().astimezone().date().isoformat()
+            local_date = _today()
             report = await generate_report(config, llm, local_date)
             store.save(report)
             job.update(last_date=local_date, last_error=None)

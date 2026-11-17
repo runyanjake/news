@@ -1,9 +1,9 @@
 // Site layout: index.html (newest), reports/<date>/ (newest per date), archive/<date>/<stamp>/ (all), archive/, privacy/,
-// disclaimer/, sources/, assets/ (fonts).
+// disclaimer/, sources/, analytics/, assets/ (fonts).
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ASSETS_DIR, renderArchive, renderDisclaimer, renderPrivacy, renderReport, renderSources } from './report-format/index.js';
+import { ASSETS_DIR, renderAnalytics, renderArchive, renderDisclaimer, renderPrivacy, renderReport, renderSources } from './report-format/index.js';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STAMP = /^\d{8}T\d{6}Z$/;
@@ -58,11 +58,12 @@ export async function publishReport(siteDir, report) {
   await writeAtomic(path.join(siteDir, 'archive', 'index.html'), renderArchive(days, report.site_name));
 }
 
-/** Pages and files shared by every report: privacy, disclaimer, sources (the current source list) and assets/. */
+/** Pages and files shared by every report: privacy, disclaimer, sources (the current source list), analytics and assets/. */
 export async function publishSite(siteDir, siteName, sources) {
   await writeAtomic(path.join(siteDir, 'privacy', 'index.html'), renderPrivacy(siteName));
   await writeAtomic(path.join(siteDir, 'disclaimer', 'index.html'), renderDisclaimer(siteName));
   await writeAtomic(path.join(siteDir, 'sources', 'index.html'), renderSources(siteName, sources));
+  await writeAtomic(path.join(siteDir, 'analytics', 'index.html'), renderAnalytics(siteName));
   const assets = fileURLToPath(ASSETS_DIR);
   for (const name of await readdir(assets)) {
     await writeAtomic(path.join(siteDir, 'assets', name), await readFile(path.join(assets, name)));
