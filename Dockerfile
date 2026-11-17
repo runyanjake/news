@@ -5,6 +5,9 @@ WORKDIR /app
 ENV SOURCES_FILE=/app/config/sources.yaml
 COPY backend/requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
+# IP -> country for visit counts, looked up locally: ip-location-db geo-whois-asn-country (CC0), refreshed every build.
+ENV GEOIP_DB=/app/geo/country.mmdb
+ADD https://cdn.jsdelivr.net/npm/@ip-location-db/geo-whois-asn-country-mmdb/geo-whois-asn-country.mmdb /app/geo/country.mmdb
 COPY backend/app ./app
 COPY config ./config
 EXPOSE 8000

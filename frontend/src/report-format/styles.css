@@ -33,6 +33,18 @@ footer p { margin: .2rem 0; }
 .policy h3 { margin-bottom: .3rem; }
 .policy .updated { font-family: monospace; color: var(--muted); }
 .source-list { columns: 2; padding-left: 1rem; }
+/* Analytics: visited countries are tinted with --accent, stronger for more views (fill-opacity set by the page script). */
+.analytics { max-width: 900px; margin: 0 auto; }
+.analytics .stats { font-size: 1.4rem; text-align: center; }
+.analytics .note, .analytics .credits { color: var(--muted); font-size: .85rem; text-align: center; }
+.map { margin: 1rem 0; }
+.world { width: 100%; height: auto; display: block; }
+.world path { fill: var(--rule); stroke: var(--bg); stroke-width: .4; }
+.world path.seen { fill: var(--accent); }
+.world path:hover { stroke: var(--fg); stroke-width: .8; }
+.legend { display: flex; align-items: center; justify-content: center; gap: .5rem; font-size: .8rem; color: var(--muted); }
+.legend .scale { width: 8rem; height: .6rem; background: linear-gradient(to right, var(--rule), var(--accent)); }
+.top-countries { columns: 2; }
 /* Display options: small and faint in the corner so the page still reads as one document. */
 .prefs { position: fixed; right: .5rem; bottom: .5rem; display: flex; gap: .25rem; opacity: .4; }
 .prefs:hover, .prefs:focus-within { opacity: 1; }

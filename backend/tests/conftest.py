@@ -80,4 +80,5 @@ def settings(tmp_path):
         llm_api_key="",
         llm_timeout=1,
         admin_token="tok",
+        analytics_db=tmp_path / "analytics" / "visits.db",
     )

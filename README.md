@@ -36,7 +36,18 @@ docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
 docker compose exec renderer node src/main.js generate   # force a new report now (a fresh deploy renders one on startup)
 ```
 
-In production Traefik serves the site at `https://${NEWS_HOST}`; nginx publishes no host port. Locally, `docker-compose.local.yml` publishes it on `http://localhost:${HTTP_PORT:-8080}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so rebuild after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), which survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
+In production Traefik serves the site at `https://${NEWS_HOST}`; nginx publishes no host port. Locally, `docker-compose.local.yml` publishes it on `http://localhost:${HTTP_PORT:-8080}`. `config/sources.yaml` and `nginx/nginx.conf` are baked into the images built from the top-level `Dockerfile` (one stage per service), so rebuild after editing them. Report JSON and rendered HTML live in the `reports` and `site` named volumes (not `data/`), and visit totals in the `analytics` volume; all survive `docker compose down` but not `down -v`. Any OpenAI-compatible endpoint works for the LLM, e.g. Ollama at `http://host.docker.internal:11434/v1`.
+
+## Visit analytics
+
+Every page sends `navigator.sendBeacon('/api/visits')`, so cached pages (the front page included) are counted too. `/analytics/` shows the totals and a world heatmap by country.
+
+- A view is one visitor on one local day, however many pages they open. The visitor is `HMAC-SHA256(ip)` under a random salt that changes daily. These hashes, the salt and today's count live in the `redis` container (`news` network only, no persistence) and expire after two days. Raw IPs are never stored.
+- Persistent totals are kept in SQLite (`ANALYTICS_DB`, default `data/analytics/visits.db`) in two tables: `totals` (overall views) and `country_views` (views per ISO country code). A view with no known country counts only in the total. If Redis is down, beacons are not counted, so repeat visits can't inflate the totals (`news_visits_total{outcome="error"}`).
+- The country is looked up locally, never through a service. The backend image downloads [ip-location-db](https://github.com/sapics/ip-location-db)'s `geo-whois-asn-country` `.mmdb` (CC0) at build time (`GEOIP_DB`). Without that file, visits are counted with no country.
+- nginx takes the client IP from Traefik's `X-Forwarded-For` (rightmost untrusted address, so the header can't be spoofed), passes it as `X-Real-IP`, and rate-limits the beacon per IP.
+- The map is Natural Earth's public-domain 1:110m countries in the Equal Earth projection (`frontend/src/report-format/world.svg`). Rebuild it with `node frontend/scripts/world-map.js <ne_110m_admin_0_countries.geojson>`.
+- Run `npm run rebuild` once after deploying so archived pages get the beacon too. New pages include it automatically.
 
 ## Development
 
@@ -65,6 +76,8 @@ Every generation logs each `Cluster: joined` merge and `Cluster: vetoed` merge w
 | GET | `/api/reports/{date}/generations/{stamp}` | one generation's report JSON |
 | POST | `/api/reports/generate` | start generation (`X-Admin-Token`); blocked at nginx |
 | GET | `/api/jobs/generate` | generation status; blocked at nginx |
+| POST | `/api/visits` | visit beacon; counts the client (`X-Real-IP` from nginx) at most once per day; returns 204 |
+| GET | `/api/analytics` | `{total, today, by_country}` views (`today` is null when Redis is down) |
 | GET | `/metrics` | Prometheus metrics; not proxied by nginx (see Metrics) |
 
 Generation and its status are blocked at nginx, so call the backend directly from a container on the `news` network (the backend image has no curl):
@@ -109,6 +122,7 @@ Grafana then reads the series from that Prometheus data source. Besides the defa
 | `news_cluster_stories` | gauge, last generation | `size` (`single`/`multi`) |
 | `news_cluster_vetoes` | gauge, last generation | |
 | `news_cluster_cohesion` | histogram, per multi-article story | `vectors` |
+| `news_visits_total` | counter | `outcome` (`counted`/`repeat`/`error`) |
 
 Useful queries: `time() - news_generation_last_success_timestamp_seconds` (alert when it passes ~25h), `increase(news_source_fetches_total{outcome="failure"}[1d])`, `histogram_quantile(0.95, rate(news_llm_request_duration_seconds_bucket[1h]))`.
 

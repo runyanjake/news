@@ -20,12 +20,28 @@ services:
     env_file: .env
     environment:
       REPORTS_DIR: /data/reports
+      ANALYTICS_DB: /data/analytics/visits.db
+      REDIS_URL: redis://pws-news-redis:6379/0
     volumes:
       - reports:/data/reports
+      - analytics:/data/analytics
     networks:
       - news
       - ai
       - metrics
+    labels:
+      - traefik.enable=false
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # Today's visitor hashes only (keys expire after two days), so no persistence; visit totals live in SQLite.
+  redis:
+    container_name: pws-news-redis
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "64mb", "--maxmemory-policy", "volatile-ttl"]
+    networks:
+      - news
     labels:
       - traefik.enable=false
     restart: unless-stopped
@@ -72,3 +88,4 @@ services:
 volumes:
   reports:
   site:
+  analytics:

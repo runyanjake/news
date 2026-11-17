@@ -60,6 +60,9 @@ CLUSTER_COHESION = Histogram(
     "news_cluster_cohesion", "Average pairwise cosine within each multi-article story", ["vectors"],
     buckets=(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95, 1.0),
 )
+VISITS = Counter(
+    "news_visits", "Visit beacons by outcome (counted: first today; repeat: already counted today)", ["outcome"]
+)
 
 
 @contextmanager

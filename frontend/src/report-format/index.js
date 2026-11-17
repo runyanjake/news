@@ -5,12 +5,14 @@ import { escape, safeUrl } from './html.js';
 import { shuffled } from './shuffle.js';
 
 const STYLES = readFileSync(new URL('./styles.css', import.meta.url), 'utf8');
+// Equal Earth projection of Natural Earth's (public domain) countries; rebuilt by scripts/world-map.js.
+const WORLD_MAP = readFileSync(new URL('./world.svg', import.meta.url), 'utf8');
 
 /** Fonts and their licenses; the publisher copies this directory to /assets/. */
 export const ASSETS_DIR = new URL('./assets/', import.meta.url);
 
 /** Change whenever the privacy policy or disclaimer text below changes. */
-export const POLICY_UPDATED = '2026-11-12';
+export const POLICY_UPDATED = '2026-11-17';
 
 // Applied in <head> so the stored (or system) choice is in place before first paint.
 const PREFS_INIT = `(function(){var d=document.documentElement;try{var s=localStorage;
@@ -25,6 +27,8 @@ const PREFS = `<div class="prefs" role="group" aria-label="Display options">
 <button type="button" data-pref="theme" title="Light / dark" aria-label="Switch between light and dark mode">&#9680;</button>
 </div>
 <script>${PREFS_TOGGLE}</script>`;
+// One beacon per page load; the backend counts each visitor at most once a day. Runs even on cached pages.
+const VISIT_BEACON = `<script>try{navigator.sendBeacon('/api/visits');}catch(e){}</script>`;
 
 function page(siteName, title, body) {
   return `<!doctype html>
@@ -41,9 +45,10 @@ function page(siteName, title, body) {
 ${body}
 <footer>
 <p>Headlines and summaries are AI-generated from the linked sources.</p>
-<p><a href="/archive/">Archive</a> · <a href="/sources/">Sources</a> · <a href="/privacy/">Privacy Policy</a> · <a href="/disclaimer/">Disclaimer</a></p>
+<p><a href="/archive/">Archive</a> · <a href="/sources/">Sources</a> · <a href="/analytics/">Analytics</a> · <a href="/privacy/">Privacy Policy</a> · <a href="/disclaimer/">Disclaimer</a></p>
 </footer>
 ${PREFS}
+${VISIT_BEACON}
 </body>
 </html>
 `;
@@ -114,6 +119,10 @@ ${updated()}
 as part of standard server logging for troubleshooting and site metrics. This data is not sold to advertisers.
 There are no accounts or advertising; your font and light/dark choices are stored only in your own browser.
 Links to sources lead to the publishers' websites, which have their own privacy policies.</p>
+<p>Each page sends a visit signal so we can count visitors. We count each visitor at most once a day and keep only
+running totals: overall views and views per country. The country is looked up from your IP address on our own server,
+without third-party services. To recognise a repeat visit on the same day we keep a one-way hash of your IP address,
+salted with a random value that changes daily, for up to two days; your IP address itself is not stored.</p>
 </article>`);
 }
 
@@ -146,4 +155,39 @@ export function renderSources(siteName, sources = []) {
 <h2>Sources</h2>
 ${list ? `<ul class="source-list">${list}</ul>` : '<p>No sources are configured.</p>'}
 </article>`);
+}
+
+// Fills the counts and colours the map from GET /api/analytics; the page itself is static and cacheable.
+const ANALYTICS_SCRIPT = `(function(){var fmt=new Intl.NumberFormat('en-US'),names=null;
+try{names=new Intl.DisplayNames(['en'],{type:'region'});}catch(e){}
+function set(id,v){document.getElementById(id).textContent=v==null?'—':fmt.format(v);}
+fetch('/api/analytics').then(function(r){if(!r.ok)throw new Error(r.status);return r.json();}).then(function(a){
+set('views-total',a.total);set('views-today',a.today);
+var counts=a.by_country||{},max=Math.max.apply(null,Object.values(counts).concat([1]));
+document.querySelectorAll('.world path[data-cc]').forEach(function(p){var n=counts[p.dataset.cc]||0;
+if(n){p.classList.add('seen');p.style.fillOpacity=(0.2+0.8*Math.log(n+1)/Math.log(max+1)).toFixed(2);}
+var t=p.querySelector('title');if(t)t.textContent+=': '+fmt.format(n);});
+var list=document.getElementById('top-countries');
+Object.keys(counts).sort(function(x,y){return counts[y]-counts[x];}).slice(0,10).forEach(function(cc){
+var li=document.createElement('li'),name=cc;try{name=names?names.of(cc):cc;}catch(e){}
+li.textContent=name+': '+fmt.format(counts[cc]);list.appendChild(li);});
+}).catch(function(){document.getElementById('analytics-status').textContent='Visitor counts are unavailable right now.';});})();`;
+
+export function renderAnalytics(siteName) {
+  return page(siteName, `${siteName} — Analytics`, `<article class="analytics">
+<h2>Analytics</h2>
+<p class="stats"><strong id="views-total">…</strong> views · <strong id="views-today">…</strong> today</p>
+<p class="note">A view is one visitor on one day, however many pages they read. Counts update every few minutes.</p>
+<p id="analytics-status" class="note"></p>
+<figure class="map">
+${WORLD_MAP}
+<figcaption class="legend"><span>Fewer</span><span class="scale"></span><span>More</span></figcaption>
+</figure>
+<h3>Top countries</h3>
+<ol id="top-countries" class="top-countries"></ol>
+<p class="credits">Country lookup: <a href="https://github.com/sapics/ip-location-db" rel="noopener">ip-location-db</a>
+(geo-whois-asn-country, CC0), run on our own server. Map:
+<a href="https://www.naturalearthdata.com/" rel="noopener">Natural Earth</a> (public domain), Equal Earth projection.</p>
+</article>
+<script>${ANALYTICS_SCRIPT}</script>`);
 }

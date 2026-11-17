@@ -17,6 +17,9 @@ class Settings:
     llm_timeout: float
     admin_token: str
     embedding_base_url: str = ""  # empty: the LLM server
+    analytics_db: Path = REPO_ROOT / "data" / "analytics" / "visits.db"
+    redis_url: str = "redis://localhost:6379/0"
+    geoip_db: Path | None = None  # .mmdb country database; None: visits get no country
 
 
 def load_settings() -> Settings:
@@ -30,4 +33,7 @@ def load_settings() -> Settings:
         llm_timeout=float(env("LLM_TIMEOUT_SECONDS", "120")),
         admin_token=env("ADMIN_TOKEN", ""),
         embedding_base_url=env("EMBEDDING_BASE_URL", "").rstrip("/"),
+        analytics_db=Path(env("ANALYTICS_DB", REPO_ROOT / "data" / "analytics" / "visits.db")),
+        redis_url=env("REDIS_URL", "redis://localhost:6379/0"),
+        geoip_db=Path(env("GEOIP_DB")) if env("GEOIP_DB") else None,
     )

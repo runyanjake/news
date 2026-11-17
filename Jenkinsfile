@@ -152,6 +152,9 @@ pipeline {
                     reports=$(fetch /api/reports) || fail "GET /api/reports via nginx failed"
                     echo "$reports" | grep -Eq '^\\[.*\\]$' || fail "/api/reports did not return a JSON list: $reports"
 
+                    analytics=$(fetch /api/analytics) || fail "GET /api/analytics via nginx failed"
+                    echo "$analytics" | grep -q '"total":' || fail "unexpected /api/analytics response: $analytics"
+
                     echo "Smoke test passed"
                 '''
             }
